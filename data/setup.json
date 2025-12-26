@@ -1,75 +1,36 @@
 {
   "owner": {
-    "AccountID": "SENTINEL-7788-XQ",
-    "PIN": 5555,
-    "Name": "KJ Gerhart",
-    "Address1": "123 Security Lane",
-    "Address2": "Suite 100",
-    "City": "Los Angeles",
+    "AccountID": "SENTINEL-CORE-001",
+    "PIN": 1234,
+    "Name": "Main Office",
+    "Address1": "123 Security Way",
+    "City": "Tech City",
     "State": "CA",
     "ZipCode": "90210",
-    "Email": "kj@example.com",
-    "Phone": "555-012-3456",
-    "Instructions": "Gate code 1234. Large dog in backyard.",
-    "Latitude": 34.0522,
-    "Longitude": -118.2437,
-    "Accuracy": 10.5,
-    "MonitorServiceID": "NOONLIGHT_01",
-    "MonitorServiceKey": "your-noonlight-api-key",
-    "MonitoringURL": "https://api.noonlight.com/dispatch/v1/alarms",
+    "Latitude": 34.05, "Longitude": -118.24, "Accuracy": 5.0,
+    "MonitoringURL": "http://localhost:8000",
     "Notify": "telegram",
-    "MonitorFire": true,
-    "MonitorPolice": true,
-    "MonitorMedical": true,
-    "MonitorOther": false,
-    "SMTPServer": "smtp.gmail.com",
-    "SMTPPort": 587,
-    "SMTPUser": "kj@gmail.com",
-    "SMTPPass": "app-password-here",
-    "MQTTServer": "192.168.1.50",
-    "MQTTPort": 1883,
-    "MQTTUser": "mqtt_user",
-    "MQTTPass": "mqtt_pass",
-    "TelegramID": "123456789",
-    "TelegramToken": "bot0000:AAABBBCCCDDD",
     "TelegramEnabled": true,
-    "NVRServerURL": "http://192.168.1.60:8081",
-    "HAIntegrationURL": "http://homeassistant.local:8123",
-    "EntryDelay": 30,
-    "ExitDelay": 60,
-    "CancelDelay": 10
+    "TelegramID": "12345678",
+    "TelegramToken": "BOT_TOKEN_HERE",
+    "EntryDelay": 30, "ExitDelay": 60, "CancelDelay": 10
   },
+  "users": [
+    {"ID": 1, "Name": "Admin", "PIN": "1234", "IsAdmin": true}
+  ],
   "zones": [
-    { "ID": 1, "Name": "Smoke 1", "Description": "Kitchen", "Type": "fire", "Location": "Kitchen", "Model": "S1", "Manufacturer": "Sentinel", "Chime": false, "AlarmOnArmedOnly": false, "PinNumber": 32, "IsI2C": false, "I2CAddress": 0, "IsPerimeter": false, "IsInterior": false, "IsPanic": false },
-    { "ID": 2, "Name": "Front Door", "Description": "Entry", "Type": "police", "Location": "Entry", "Model": "D1", "Manufacturer": "Sentinel", "Chime": true, "AlarmOnArmedOnly": true, "PinNumber": 33, "IsI2C": false, "I2CAddress": 0, "IsPerimeter": true, "IsInterior": false, "IsPanic": false },
-    { "ID": 3, "Name": "Back Door", "Description": "Patio", "Type": "police", "Location": "Patio", "Model": "D1", "Manufacturer": "Sentinel", "Chime": true, "AlarmOnArmedOnly": true, "PinNumber": 34, "IsI2C": false, "I2CAddress": 0, "IsPerimeter": true, "IsInterior": false, "IsPanic": false },
-    { "ID": 4, "Name": "Motion LR", "Description": "Living Room", "Type": "police", "Location": "LivingRm", "Model": "M1", "Manufacturer": "Sentinel", "Chime": false, "AlarmOnArmedOnly": true, "PinNumber": 35, "IsI2C": false, "I2CAddress": 0, "IsPerimeter": false, "IsInterior": true, "IsPanic": false },
-    { "ID": 5, "Name": "Window 1", "Description": "Bedroom 1", "Type": "police", "Location": "Bed1", "Model": "W1", "Manufacturer": "Sentinel", "Chime": false, "AlarmOnArmedOnly": true, "PinNumber": 36, "IsI2C": false, "I2CAddress": 0, "IsPerimeter": true, "IsInterior": false, "IsPanic": false },
-    { "ID": 6, "Name": "Window 2", "Description": "Bedroom 2", "Type": "police", "Location": "Bed2", "Model": "W1", "Manufacturer": "Sentinel", "Chime": false, "AlarmOnArmedOnly": true, "PinNumber": 39, "IsI2C": false, "I2CAddress": 0, "IsPerimeter": true, "IsInterior": false, "IsPanic": false },
-    { "ID": 7, "Name": "Panic Button", "Description": "Master Bed", "Type": "police", "Location": "Master", "Model": "P1", "Manufacturer": "Sentinel", "Chime": false, "AlarmOnArmedOnly": false, "PinNumber": 14, "IsI2C": false, "I2CAddress": 0, "IsPerimeter": false, "IsInterior": false, "IsPanic": true },
-    { "ID": 8, "Name": "Leak Sensor", "Description": "Water Heater", "Type": "other", "Location": "Utility", "Model": "L1", "Manufacturer": "Sentinel", "Chime": false, "AlarmOnArmedOnly": false, "PinNumber": 13, "IsI2C": false, "I2CAddress": 0, "IsPerimeter": false, "IsInterior": false, "IsPanic": false }
+    {
+      "ID": 1, "Name": "Front Door", "Description": "Main Entrance",
+      "Type": "police", "PinNumber": 4, "IsPerimeter": true, "Chime": true
+    }
   ],
   "relays": [
-    { "ID": 1, "Name": "Internal Siren", "Description": "Piezo Buzzer", "DurationSec": 60, "Location": "Hallway", "Type": "siren", "Repeat": false, "PinNumber": 2 },
-    { "ID": 2, "Name": "External Horn", "Description": "12V 30W Horn", "DurationSec": 300, "Location": "Roof", "Type": "siren", "Repeat": false, "PinNumber": 4 },
-    { "ID": 3, "Name": "Porch Light", "Description": "Front Flood", "DurationSec": 120, "Location": "Exterior", "Type": "light", "Repeat": false, "PinNumber": 5 },
-    { "ID": 4, "Name": "Patio Light", "Description": "Back Flood", "DurationSec": 120, "Location": "Exterior", "Type": "light", "Repeat": false, "PinNumber": 18 },
-    { "ID": 5, "Name": "Door Lock", "Description": "Mag Lock", "DurationSec": 5, "Location": "FrontDoor", "Type": "lock", "Repeat": false, "PinNumber": 19 },
-    { "ID": 6, "Name": "Strobe", "Description": "Blue Strobe", "DurationSec": 600, "Location": "Roof", "Type": "strobe", "Repeat": true, "PinNumber": 21 },
-    { "ID": 7, "Name": "NVR Trigger", "Description": "Camera Record", "DurationSec": 30, "Location": "Server", "Type": "other", "Repeat": false, "PinNumber": 22 },
-    { "ID": 8, "Name": "Aux Power", "Description": "Backup System", "DurationSec": 0, "Location": "Panel", "Type": "other", "Repeat": false, "PinNumber": 23 }
+    {"ID": 1, "Name": "Siren", "Type": "siren", "PinNumber": 17, "DurationSec": 300}
   ],
   "rules": [
     {
-      "ID": 1,
-      "Name": "Porch Light on Entry",
-      "Enabled": true,
-      "TriggerZoneID": 2,
-      "TriggerCondition": "open",
-      "RequiredState": 0,
-      "ActionRelayID": 3,
-      "ActionType": 1,
-      "DurationSec": 120
+      "ID": 1, "Name": "NightAlarm", "Enabled": true, "TriggerZoneID": 1,
+      "TriggerCondition": "open", "RequiredState": 3, "ActionRelayID": 1
     }
   ]
 }

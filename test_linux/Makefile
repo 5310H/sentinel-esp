@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -I../components/config -I../components/engine -I../components/storage -I../components/hal -g
-LDFLAGS = -lcjson -lcurl -lpthread
+LDFLAGS = -lcjson -lcurl -lpthread -Wl,--wrap=hal_get_zone_state
 
 # Added ../components/engine/monitor.c to the list
 SRCS = main_mock.c \

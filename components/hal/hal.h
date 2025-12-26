@@ -2,11 +2,12 @@
 #define HAL_H
 
 #include <stdbool.h>
-#include "config.h"
 
-void hal_set_relay(int gpio_pin, bool state);
-void hal_buzzer_beep(int duration_ms);
-bool hal_get_zone_state(Zone_t *zone); // Matches the .c file
-void hal_display_message(const char* msg);
+// Zone inputs
+bool hal_get_zone_state(int zone_id);
+
+// Relay outputs
+void hal_set_relay_state(int relay_id, bool active);
+bool hal_get_relay_state(int relay_id); // Ensure this line exists
 
 #endif

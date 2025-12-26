@@ -1,16 +1,9 @@
-{
-  "users": [
-    {
-      "ID": 1,
-      "Name": "Admin",
-      "PIN": "5555",
-      "IsAdmin": true
-    },
-    {
-      "ID": 2,
-      "Name": "Guest",
-      "PIN": "1234",
-      "IsAdmin": false
-    }
-  ]
-}
+[{
+    "ID": 1,
+    "Name": "Admin",
+    "PIN": "1234",
+    "Phone": "555-0100",
+    "Email": "admin@example.com",
+    "Notify": "email",
+    "IsAdmin": true
+}]

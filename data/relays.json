@@ -1,0 +1,12 @@
+[
+  {
+    "ID": 1,
+    "Name": "Siren",
+    "Description": "External Siren",
+    "DurationSec": 60,
+    "Location": "Eave",
+    "Type": "siren",
+    "Repeat": false,
+    "PinNumber": 17
+  }
+]

@@ -1,132 +1,108 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sentinel Core</title>
+    <title>Sentinel Panel</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: #eee; text-align: center; }
-        .box { border: 2px solid #444; padding: 20px; margin: 10px auto; width: 400px; border-radius: 10px; background: #222; }
+        body { font-family: sans-serif; background: #121212; color: white; text-align: center; transition: background 0.5s; }
+        .panel { background: #222; width: 420px; margin: 50px auto; padding: 20px; border-radius: 15px; border: 2px solid #444; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .display { background: #000; color: #0f0; padding: 20px; font-family: monospace; font-size: 1.4rem; margin-bottom: 20px; border-radius: 5px; border: 1px solid #333; }
+        .alarm-active { background: #600 !important; color: #f00 !important; border-color: #f00; animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.5; } }
         .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        button { padding: 12px; font-size: 16px; cursor: pointer; background: #333; color: white; border: 1px solid #555; border-radius: 5px; }
+        button { padding: 15px; background: #333; color: white; border: 1px solid #555; border-radius: 5px; cursor: pointer; font-size: 1rem; }
         button:hover { background: #444; }
+        .btn-panic { background: #c0392b; grid-column: span 3; font-weight: bold; margin-top: 15px; }
+        .zone-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #333; }
+        .status-tag { padding: 2px 8px; border-radius: 3px; font-size: 0.8rem; }
+        .tripped { background: #e74c3c; color: white; }
+        .clear { background: #27ae60; color: white; }
         .hidden { display: none; }
-        .admin-btn { background: #d35400; margin-top: 10px; width: 100%; }
-        table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 14px; }
-        th, td { border: 1px solid #444; padding: 6px; }
-        input { padding: 8px; margin: 5px; width: 80%; background: #333; color: white; border: 1px solid #555; }
-        .section { text-align: left; border-top: 1px solid #444; padding-top: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <h1>SENTINEL CORE</h1>
-
-    <div id="login-screen" class="box">
-        <h3>ENTER PIN</h3>
-        <div id="pin-display" style="font-size: 24px; margin-bottom: 10px; color: #27ae60;">____</div>
-        <div class="keypad" id="keys"></div>
-        <button onclick="submitPin()" style="width:100%; margin-top:10px; background:#27ae60;">OK</button>
-    </div>
-
-    <div id="dash-screen" class="box hidden">
-        <h2 id="welcome"></h2>
-        <button style="background:#c0392b; width:45%;">ARM</button>
-        <button style="background:#27ae60; width:45%;">DISARM</button>
-        <button id="maint-btn" class="admin-btn hidden" onclick="showMaint()">MAINTENANCE</button>
-        <button onclick="location.reload()" style="width:100%; margin-top:10px;">LOGOUT</button>
-    </div>
-
-    <div id="maint-screen" class="box hidden" style="width: 600px;">
-        <h2>MAINTENANCE MODE</h2>
+    <div class="panel">
+        <div id="status" class="display">SYSTEM READY</div>
         
-        <div class="section">
-            <h4>System Info</h4>
-            <div id="config-data">Loading...</div>
+        <div id="keypad-box">
+            <div class="keypad" id="keys"></div>
+            <button class="btn-panic" onclick="triggerPanic()">PANIC</button>
         </div>
 
-        <div class="section">
-            <h4>User Management</h4>
-            <table id="user-table"></table>
-            <hr>
-            <h4>Add New User</h4>
-            <input id="new-name" placeholder="Name">
-            <input id="new-pin" placeholder="PIN">
-            <label><input type="checkbox" id="new-admin"> Is Admin</label><br>
-            <button onclick="createUser()" style="background:#27ae60;">Save New User</button>
+        <div id="maint-box" class="hidden">
+            <h3>ZONE SIMULATOR</h3>
+            <div id="zone-ui"></div>
+            <button onclick="location.reload()" style="width:100%; margin-top:20px; background:#444;">LOGOUT / DISARM</button>
         </div>
-        
-        <button onclick="document.getElementById('maint-screen').className='box hidden'" style="margin-top:20px; width:100%;">CLOSE MAINTENANCE</button>
     </div>
 
     <script>
-        let currentPin = "";
-        let adminId = null;
+        let pin = "";
+        let pollTimer = null;
 
+        // Keypad Logic
         const keys = document.getElementById('keys');
-        [1,2,3,4,5,6,7,8,9,'C',0,'<'].forEach(k => {
+        [1,2,3,4,5,6,7,8,9,'CLR',0,'OK'].forEach(k => {
             let b = document.createElement('button');
             b.innerText = k;
-            b.onclick = () => {
-                if(k === 'C') currentPin = "";
-                else if(k === '<') currentPin = currentPin.slice(0,-1);
-                else currentPin += k;
-                document.getElementById('pin-display').innerText = "*".repeat(currentPin.length) || "____";
+            b.onclick = async () => {
+                if(k === 'CLR') pin = "";
+                else if(k === 'OK') {
+                    const res = await fetch('/api/login', {method:'POST', body:'pin='+pin});
+                    if(res.ok) {
+                        const data = await res.json();
+                        document.getElementById('keypad-box').classList.add('hidden');
+                        document.getElementById('maint-box').classList.remove('hidden');
+                        startPolling();
+                    } else { pin = ""; updateDisplay("INVALID PIN"); }
+                }
+                else if(pin.length < 4) pin += k;
+                if(k !== 'OK') updateDisplay("*".repeat(pin.length) || "ENTER PIN");
             };
             keys.appendChild(b);
         });
 
-        async function submitPin() {
-            const res = await fetch('/api/login', { method: 'POST', body: `pin=${currentPin}` });
-            const data = await res.json();
-            if(data.id) {
-                adminId = data.id;
-                document.getElementById('login-screen').classList.add('hidden');
-                document.getElementById('dash-screen').classList.remove('hidden');
-                document.getElementById('welcome').innerText = "System: " + data.name;
-                if(data.isAdmin) document.getElementById('maint-btn').classList.remove('hidden');
-            } else { alert("Denied"); currentPin = ""; }
+        function updateDisplay(txt) { document.getElementById('status').innerText = txt; }
+
+        async function triggerPanic() {
+            await fetch('/api/panic', {method:'POST'});
+            updateDisplay("!!! PANIC !!!");
         }
 
-        async function showMaint() {
-            // Get Config
-            const cRes = await fetch('/api/config');
-            const conf = await cRes.json();
-            document.getElementById('config-data').innerHTML = `
-                <b>Owner:</b> ${conf.owner} (ID: ${conf.acct})<br>
-                <b>Zones:</b> ${conf.zones.map(z => z.name).join(', ')}<br>
-                <b>Relays:</b> ${conf.relays.map(r => r.name).join(', ')}
-            `;
-
-            // Get Users
-            const uRes = await fetch('/api/users', { headers: {'X-Admin-ID': adminId} });
-            const users = await uRes.json();
-            let html = "<tr><th>Name</th><th>Admin</th><th>Action</th></tr>";
-            users.forEach(u => {
-                html += `<tr><td>${u.name}</td><td>${u.isAdmin}</td>
-                         <td><button onclick="deleteUser(${u.id})">DEL</button></td></tr>`;
-            });
-            document.getElementById('user-table').innerHTML = html;
-            document.getElementById('maint-screen').classList.remove('hidden');
+        async function triggerZone(id, state) {
+            await fetch('/api/zone/trigger', {method:'POST', body:`id=${id}&tripped=${state}`});
         }
 
-        async function createUser() {
-            const name = document.getElementById('new-name').value;
-            const pin = document.getElementById('new-pin').value;
-            const adm = document.getElementById('new-admin').checked;
-            await fetch('/api/users', {
-                method: 'POST',
-                headers: {'X-Admin-ID': adminId},
-                body: `name=${name}&pin=${pin}&isAdmin=${adm}`
-            });
-            showMaint();
-        }
+        function startPolling() {
+            if(pollTimer) return;
+            pollTimer = setInterval(async () => {
+                const res = await fetch('/api/config');
+                const data = await res.json();
+                
+                // Update Main Status & Visuals
+                const statusBox = document.getElementById('status');
+                if (data.arm_state === 3) { // Assuming 3 is "ALARM" state in your engine
+                    statusBox.classList.add('alarm-active');
+                    statusBox.innerText = "ALARM TRIGGERED";
+                    document.body.style.background = "#300";
+                } else {
+                    statusBox.classList.remove('alarm-active');
+                    document.body.style.background = "#121212";
+                    statusBox.innerText = data.arm_state === 0 ? "DISARMED" : "SYSTEM ARMED";
+                }
 
-        async function deleteUser(id) {
-            if(!confirm("Delete user " + id + "?")) return;
-            await fetch('/api/users', {
-                method: 'DELETE',
-                headers: {'X-Admin-ID': adminId},
-                body: `id=${id}`
-            });
-            showMaint();
+                // Update Zone List
+                document.getElementById('zone-ui').innerHTML = data.zones.map(z => `
+                    <div class="zone-row">
+                        <span>${z.name}</span>
+                        <div>
+                            <span class="status-tag ${z.tripped ? 'tripped' : 'clear'}">${z.tripped ? 'TRIPPED' : 'SECURE'}</span>
+                            <button onclick="triggerZone(${z.id}, ${!z.tripped})" style="padding:5px; margin-left:10px; font-size:10px;">
+                                ${z.tripped ? 'Clear' : 'Trip'}
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }, 500);
         }
     </script>
 </body>

@@ -1,24 +1,19 @@
 #ifndef NOTIFIER_H
 #define NOTIFIER_H
 
-#include "config.h"
 #include <stdbool.h>
+#include "config.h"
 
 typedef enum {
+    NOTIFY_INFO,
     NOTIFY_ALARM,
-    NOTIFY_ARM_STATE,
-    NOTIFY_USER_ACTION,
-    NOTIFY_ERROR
+    NOTIFY_SYSTEM,
+    NOTIFY_USER_ACTION  // Fixes user_mgr.c error
 } NotifyType_t;
 
-// Lifecycle
-void notifier_init(const char* url, const char* account_id);
-
-// Outbound
+void notifier_init(Owner_t* owner_ptr, User_t* users_ptr, int u_count);
 void notifier_send(NotifyType_t type, const char* message);
-void notifier_send_email(const char* subject, const char* body);
-
-// Control
 bool notifier_cancel_alarm(void);
+// Inside components/engine/notifier.h
 
 #endif
