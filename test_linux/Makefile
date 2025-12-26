@@ -1,10 +1,12 @@
 CC = gcc
 CFLAGS = -Wall -I../components/config -I../components/engine -I../components/storage -I../components/hal -g
-# IMPORTANT: -lcurl must be here
-LDFLAGS = -lcjson -lcurl
+LDFLAGS = -lcjson -lcurl -lpthread
 
+# Added ../components/engine/monitor.c to the list
 SRCS = main_mock.c \
+       mongoose.c \
        ../components/engine/engine.c \
+       ../components/engine/monitor.c \
        ../components/engine/user_mgr.c \
        ../components/engine/notifier.c \
        ../components/storage/storage.c \
@@ -22,9 +24,6 @@ $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	@echo "Deep cleaning..."
 	rm -f $(TARGET)
 	find .. -name "*.o" -type f -delete
-
-run: all
-	./$(TARGET)
+	rm -f *.o
