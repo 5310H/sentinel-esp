@@ -1,6 +1,10 @@
+#include "dispatcher.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
 #include "hardware_config.h"
 
-void smtp_send_alert(struct owner *o, struct zone *z, struct contact *c) {
+void smtp_send_alert(owner_t *o, zone_t *z, user_t *c) {
     char *data_packet = NULL;
     
     // We add specific KC868 context to the email so the user knows which board triggered
@@ -13,11 +17,11 @@ void smtp_send_alert(struct owner *o, struct zone *z, struct contact *c) {
         "Trigger: %s at %s\r\n"
         "Sensor Type: %s\r\n"
         "Hardware Port: PCF8575_IO\r\n",
-        o->SmtpUser, c->phone, z->location,
+        o->smtp_user, c->phone, z->location,
         z->description, z->location, z->type);
 
     printf("\n[SMTP ENGINE - W5500 ETHERNET READY]\n");
-    printf("Target: %s:%d\n", o->SmtpServer, o->SmtpPort);
+    printf("Target: %s:%d\n", o->smtp_server, o->smtp_port);
     printf("Data:\n%s\n", data_packet);
 
     free(data_packet);

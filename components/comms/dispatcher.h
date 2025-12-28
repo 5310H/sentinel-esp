@@ -12,6 +12,24 @@
 #define MAX_RELAYS  8
 #define MAX_RULES   20
 
+/* --- ADDED: State Enums (Fixes your compiler error) --- */
+typedef enum {
+    STATE_DISARMED = 0,
+    STATE_ARMED_STAY,
+    STATE_ARMED_AWAY,
+    STATE_ARMED_NIGHT,
+    STATE_VACATION
+} system_state_t;
+
+/* --- ADDED: Event Enums (Fixes your compiler error) --- */
+typedef enum {
+    EVENT_NONE = 0,
+    EVENT_ZONE_TRIP,
+    EVENT_PANIC,
+    EVENT_CANCEL,
+    EVENT_SYSTEM_FAULT
+} event_type_t;
+
 /* ================= USER ================= */
 typedef struct {
     char name[STR_MEDIUM];
@@ -91,5 +109,8 @@ void dispatcher_init(owner_t *o, zone_t *z, int z_cnt, user_t *u, int u_cnt);
 void dispatcher_process_event(int event_type, int zone_id);
 void noonlight_trigger(owner_t *home);
 void smtp_send_email(owner_t *home, const char* subject, const char* body);
+
+// Storage Prototype
+void storage_load_owner(owner_t *obj);
 
 #endif
