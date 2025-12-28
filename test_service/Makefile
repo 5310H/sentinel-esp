@@ -1,41 +1,47 @@
-# Compiler and Flags
 CC = gcc
-# Added -g for debug symbols and -O0 to disable optimization for easier debugging
-CFLAGS = -Wall -Wextra -D_GNU_SOURCE -I.
-DEBUG_FLAGS = -g -O0
+CFLAGS = -Wall -Wextra -g -O0 -D_GNU_SOURCE
 
-# Directories
-COMM_DIR = comm
-TEST_DIR = test_service
+# Paths - Root is one level up from test_service
+ROOT        = ..
+COMMS_DIR   = $(ROOT)/components/comms
+STORAGE_DIR = $(ROOT)/components/storage
+HAL_DIR     = $(ROOT)/components/hal
+
+# Include directories
+INCLUDES = -I. -I$(COMMS_DIR) -I$(STORAGE_DIR) -I$(HAL_DIR)
 
 # Source Files
-SOURCES = $(TEST_DIR)/sentinel_service_test.c $(COMM_DIR)/noonlight.c
-OBJECTS = $(SOURCES:.c=.o)
+SRCS = sentinel_test.c \
+       $(COMMS_DIR)/dispatcher.c \
+       $(COMMS_DIR)/noonlight.c \
+       $(COMMS_DIR)/smtp.c \
+       $(STORAGE_DIR)/storage_mgr.c \
+       $(STORAGE_DIR)/cJSON.c \
+       $(HAL_DIR)/hal_mock_gpio.c
 
-# Target Binary
-TARGET = sentinel_service_test
+# Object Files mapping
+OBJS = $(SRCS:.c=.o)
+TARGET = sentinel_test
 
-# Default Rule: Build the standard test binary
+# --- Build Rules ---
+
 all: $(TARGET)
 
-$(TARGET): $(OBJECTS)
-	$(CC) $(CFLAGS) -o $@ $^
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(TARGET) $(OBJS) -lcurl -lm -lssl -lcrypto
 
-# Debug Rule: Build with symbols for GDB/Valgrind
-debug: CFLAGS += $(DEBUG_FLAGS)
-debug: clean $(TARGET)
-	@echo "Debug build complete. Use 'gdb ./$(TARGET)' to start debugging."
-
-# Rule for object files
+# Rule for local files (sentinel_test.c)
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-# Run the test
-run: all
-	./$(TARGET)
+# Rule for component files (handles the ../ prefix)
+$(ROOT)/%.o: $(ROOT)/%.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-# Cleanup
 clean:
-	rm -f $(COMM_DIR)/*.o $(TEST_DIR)/*.o $(TARGET)
+	rm -f $(TARGET) *.o
+	rm -f $(COMMS_DIR)/*.o
+	rm -f $(STORAGE_DIR)/*.o
+	rm -f $(HAL_DIR)/*.o
 
-.PHONY: all clean run debug
+.PHONY: all clean
