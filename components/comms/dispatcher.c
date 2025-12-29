@@ -1,36 +1,36 @@
 #include <stdio.h>
 #include <string.h>
+#include "storage_mgr.h"
 #include "dispatcher.h"
-void smtp_send_alert(owner_t *o, zone_t *z);
+#include "noonlight.h"
+#include "smtp.h"
 
-static owner_t *_owner;
-static zone_t  *_zones;
-static int      _zone_count;
-static user_t   *_users;
-static int      _user_count;
+static owner_t *system_owner;
+static zone_t *system_zones;
 
-int current_state = STATE_DISARMED;
-
-void dispatcher_init(owner_t *o, zone_t *z, int z_cnt, user_t *u, int u_cnt) {
-    _owner = o;
-    _zones = z;
-    _zone_count = z_cnt;
-    _users = u;
-    _user_count = u_cnt;
-    printf("[DISPATCHER] System Initialized. Monitoring %d zones for %s\n", _zone_count, _owner->name);
+void notifier_init(owner_t *o, zone_t *z, int zc, user_t *u, int uc) {
+    system_owner = o;
+    system_zones = z;
+    printf("[DISPATCHER] Initialized. Mode: %s\n", o->notify);
 }
 
-void dispatcher_process_event(int event_type, int zone_id) {
-    printf("[DISPATCHER] Event %d received from Zone %d\n", event_type, zone_id);
-    
-    if (event_type == EVENT_ZONE_TRIP) {
-        if (current_state != STATE_DISARMED) {
-            printf("[ALARM] Triggering Noonlight and Notifications!\n");
-            noonlight_trigger(_owner);
-            // Assuming the first zone for the mock alert
-            smtp_send_alert(_owner, &_zones[0]);
-        } else {
-            printf("[CHIME] Zone %d opened (Disarmed Mode)\n", zone_id);
-        }
+void notifier_send(int event, int zone_idx) {
+    if (strcmp(system_owner->notify, "service") == 0) {
+        // Live Noonlight API Call
+        noonlight_send_event(system_owner, "ALARM_ID_LINUX", &system_zones[zone_idx]);
+    } else {
+        // Live SMTP Email Call
+        char body[512];
+        snprintf(body, sizeof(body), "SENTINEL ALARM: Zone %d (%s) triggered.", 
+                 zone_idx, system_zones[zone_idx].name);
+        smtp_send_email(system_owner, "CRITICAL: Home Alarm", body);
+    }
+}
+
+void notifier_cancel_alarm() {
+    if (strcmp(system_owner->notify, "service") == 0) {
+        noonlight_cancel_alarm(system_owner, 0, "1234");
+    } else {
+        smtp_send_email(system_owner, "SENTINEL: Status", "System Disarmed/Canceled.");
     }
 }
