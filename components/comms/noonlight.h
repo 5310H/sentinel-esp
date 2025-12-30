@@ -3,8 +3,13 @@
 
 #include "storage_mgr.h"
 
-// Use owner_t and zone_t instead of "struct owner"
-void noonlight_send_event(owner_t *o, const char *alarm_id, zone_t *z);
-void noonlight_cancel_alarm(owner_t *o, int slot, const char *entered_pin);
+// Lifecycle Functions
+void noonlight_create_alarm(owner_t *o, zone_t *z);
+void noonlight_update_contacts(owner_t *o, user_t *users, int user_count);
+void noonlight_update_events(const char *event_msg);
+void noonlight_cancel_alarm(owner_t *o, const char *entered_pin);
+
+// High-level bridge for the Dispatcher
+void noonlight_send_event(owner_t *o, const char *msg, zone_t *z);
 
 #endif

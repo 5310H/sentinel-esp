@@ -1,151 +1,109 @@
-#include "mongoose.h"
-#include "storage.h"
-#include "engine.h"
-#include "hal.h"
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdbool.h>
+#include <unistd.h>
 #include <string.h>
-#include <time.h>
+#include <signal.h>
 
-static bool simulated_zones[MAX_ZONES];
+#include "storage_mgr.h"
+#include "mongoose.h"
 
-bool __wrap_hal_get_zone_state(int zone_id) {
-    if (zone_id >= 0 && zone_id < MAX_ZONES) return simulated_zones[zone_id];
-    return false;
-}
+// External functions from your engine
+extern void engine_init(void);
+extern void engine_tick(void);
+extern void notifier_init(void); 
 
-static const char *s_http_addr = "http://0.0.0.0:8000";
-static Owner_t owner;
-static User_t users[MAX_USERS];
-static Zone_t zones[MAX_ZONES];
-static Relay_t relays[MAX_RELAYS];
-static Rule_t rules[MAX_RULES];
-static int u_count, z_count, r_count, rule_count;
+static bool s_running = true;
+struct mg_mgr mgr;
 
-void log_event(const char *user, const char *action) {
-    FILE *f = fopen("history.csv", "a");
-    if (f) {
-        time_t now = time(NULL);
-        char *ts = ctime(&now);
-        if(ts) ts[strlen(ts) - 1] = '\0'; 
-        fprintf(f, "%s | %-10s | %s\n", ts ? ts : "N/A", user, action);
-        fclose(f);
-    }
-}
+void handle_sigint(int sig) { s_running = false; }
 
+// --- THE WEB HANDLER ---
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+        const char *headers = "Content-Type: application/json\r\n"
+                              "Access-Control-Allow-Origin: *\r\n";
 
-        // 1. LOGIN
-        if (mg_match(hm->uri, mg_str("/api/login"), NULL)) {
-            char pin[16] = {0};
-            mg_http_get_var(&hm->body, "pin", pin, sizeof(pin));
-            for (int i = 0; i < u_count; i++) {
-                if (strcmp(users[i].PIN, pin) == 0) {
-                    mg_http_reply(c, 200, "Content-Type: application/json\r\n",
-                        "{\"id\":%d,\"name\":\"%s\",\"isAdmin\":%s}",
-                        users[i].ID, users[i].Name, users[i].IsAdmin ? "true" : "false");
-                    return;
-                }
+        // Logic: Any request to /api/ returns the full system state
+        if (hm->uri.len >= 5 && memcmp(hm->uri.buf, "/api/", 5) == 0) {
+            
+            // 1. Build Zones JSON string
+            char z_list[2048] = "";
+            for (int i = 0; i < z_count; i++) {
+                char tmp[256];
+                snprintf(tmp, sizeof(tmp), 
+                    "{\"id\":%d,\"name\":\"%s\",\"type\":\"%s\",\"status\":\"secure\"}%s",
+                    i+1, zones[i].name, zones[i].type, (i < z_count - 1 ? "," : ""));
+                strcat(z_list, tmp);
             }
-            mg_http_reply(c, 401, "", "{\"error\":\"Invalid PIN\"}");
-        }
-        // 2. ARMING
-        else if (mg_match(hm->uri, mg_str("/api/arm"), NULL)) {
-            char state_str[10] = {0};
-            mg_http_get_var(&hm->body, "state", state_str, sizeof(state_str));
-            engine_arm(atoi(state_str)); 
-            log_event("USER", "ARM REQUEST");
-            mg_http_reply(c, 200, "", "{\"status\":\"OK\"}");
-        }
-        // 3. DISARMING (FIXED: Added pin argument)
-        else if (mg_match(hm->uri, mg_str("/api/disarm"), NULL)) {
-            char pin[16] = {0};
-            mg_http_get_var(&hm->body, "pin", pin, sizeof(pin));
-            engine_disarm(pin);
-            log_event("USER", "DISARM ATTEMPT");
-            mg_http_reply(c, 200, "", "{\"status\":\"OK\"}");
-        }
-        // 4. PANIC
-        else if (mg_match(hm->uri, mg_str("/api/panic"), NULL)) {
-            engine_trigger_alarm();
-            log_event("ALARM", "PANIC TRIGGERED");
-            mg_http_reply(c, 200, "", "{\"status\":\"OK\"}");
-        }
-        // 5. ZONE TRIGGER
-        else if (mg_match(hm->uri, mg_str("/api/zone/trigger"), NULL)) {
-            char id_str[10] = {0}, state_str[10] = {0};
-            mg_http_get_var(&hm->body, "id", id_str, sizeof(id_str));
-            mg_http_get_var(&hm->body, "tripped", state_str, sizeof(state_str));
-            int zid = atoi(id_str);
-            if (zid >= 0 && zid < MAX_ZONES) {
-                simulated_zones[zid] = (strcmp(state_str, "true") == 0);
+
+            // 2. Build Relays JSON string
+            // We use .id and .type which we know exist. 
+            // We generate the name string dynamically to avoid struct member errors.
+            char r_list[1024] = "";
+            for (int i = 0; i < r_count; i++) {
+                char tmp[256];
+                snprintf(tmp, sizeof(tmp), 
+                    "{\"id\":%d,\"name\":\"Relay %d\",\"type\":\"%s\",\"state\":0,\"active\":false}%s",
+                    relays[i].id, relays[i].id, relays[i].type, (i < r_count - 1 ? "," : ""));
+                strcat(r_list, tmp);
             }
-            mg_http_reply(c, 200, "", "{\"status\":\"OK\"}");
-        }
-        // 6. STATUS
-        else if (mg_match(hm->uri, mg_str("/api/config"), NULL)) {
-            char json[8192] = {0}, z_buf[2048] = "[", r_buf[1024] = "[";
-            for (int i=0; i<z_count; i++) {
-                char b[256]; snprintf(b, sizeof(b), "{\"id\":%d,\"name\":\"%s\",\"tripped\":%s}%s", 
-                    zones[i].ID, zones[i].Name, simulated_zones[zones[i].ID]?"true":"false", (i<z_count-1)?",":"");
-                strcat(z_buf, b);
-            }
-            strcat(z_buf, "]");
-            for (int i=0; i<r_count; i++) {
-                char b[256]; snprintf(b, sizeof(b), "{\"id\":%d,\"active\":%s}%s", 
-                    relays[i].ID, engine_get_relay_state(relays[i].ID)?"true":"false", (i<r_count-1)?",":"");
-                strcat(r_buf, b);
-            }
-            strcat(r_buf, "]");
-            snprintf(json, sizeof(json), "{\"arm_state\":%d,\"zones\":%s,\"relays\":%s}", 
-                     engine_get_arm_state(), z_buf, r_buf);
-            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", json);
-        }
-        // 7. HISTORY (FIXED: Correct mg_file_read usage)
-        else if (mg_match(hm->uri, mg_str("/api/users/add"), NULL)) {
-            char name[32] = {0}, pin[16] = {0};
-            mg_http_get_var(&hm->body, "name", name, sizeof(name));
-            mg_http_get_var(&hm->body, "pin", pin, sizeof(pin));
-            if (u_count < MAX_USERS) {
-                strncpy(users[u_count].Name, name, sizeof(users[u_count].Name));
-                strncpy(users[u_count].PIN, pin, sizeof(users[u_count].PIN));
-                users[u_count].ID = u_count + 1;
-                users[u_count].IsAdmin = false;
-                u_count++;
-                storage_save_all(&owner, users, u_count, zones, z_count, relays, r_count, rules, rule_count);
-                log_event("ADMIN", "Added new user");
-                mg_http_reply(c, 200, "", "{\"status\":\"OK\"}");
-            } else {
-                mg_http_reply(c, 400, "", "{\"error\":\"User limit reached\"}");
-            }
-        }
-        else if (mg_match(hm->uri, mg_str("/api/history"), NULL)) {
-            struct mg_str s = mg_file_read(&mg_fs_posix, "history.csv");
-            if (s.buf != NULL) {
-                mg_http_reply(c, 200, "Content-Type: text/csv\r\nContent-Disposition: attachment; filename=\"history_backup.csv\"\r\n", "%.*s", (int) s.len, s.buf);
-                free((void *) s.buf);
-            } else {
-                mg_http_reply(c, 200, "", "No logs found.");
-            }
+
+            // 3. Send the unified response
+            mg_http_reply(c, 200, headers,
+                "{"
+                "\"status\":\"running\",\"armed\":0,\"alarm\":0,\"system_state\":\"READY\","
+                "\"owner_email\":\"%s\",\"zone_count\":%d,\"relay_count\":%d,"
+                "\"zones\":[%s],"
+                "\"relays\":[%s],"
+                "\"relay_list\":[%s],"
+                "\"outputs\":[%s]"
+                "}\n", 
+                owner.email, z_count, r_count, z_list, r_list, r_list, r_list);
         }
         else {
+            // Serve static web files (index.html, etc.) from the current directory
             struct mg_http_serve_opts opts = {.root_dir = "."};
             mg_http_serve_dir(c, hm, &opts);
         }
     }
 }
 
-int main() {
-    storage_load_all(&owner, users, &u_count, zones, &z_count, relays, &r_count, rules, &rule_count);
-    engine_init();
-    struct mg_mgr mgr; mg_mgr_init(&mgr);
-    mg_http_listen(&mgr, s_http_addr, fn, NULL);
-    printf("Sentinel Console Active: %s\n", s_http_addr);
-    for (;;) {
-        engine_tick();
-        mg_mgr_poll(&mgr, 50);
+// --- HAL WRAPPERS (To satisfy the linker) ---
+void __wrap_hal_set_relay(int relay_id, bool state) { 
+    printf("\n[HAL] RELAY %d -> %s\n", relay_id, state ? "ON" : "OFF"); 
+}
+bool __wrap_hal_get_zone_state(int zone_id) { return false; }
+void __wrap_hal_set_siren(bool state) { printf("\n[HAL] SIREN -> %s\n", state ? "ON" : "OFF"); }
+void __wrap_hal_set_strobe(bool state) { printf("\n[HAL] STROBE -> %s\n", state ? "ON" : "OFF"); }
+bool __wrap_hal_get_relay_state(int relay_id) { return false; }
+
+// --- MAIN LOOP ---
+int main(int argc, char *argv[]) {
+    mg_log_set(MG_LL_NONE); 
+    signal(SIGINT, handle_sigint);
+    
+    // Initialize storage and system
+    storage_load_all(&owner, zones, &z_count, users, &u_count, relays, &r_count);
+    notifier_init();
+    
+    mg_mgr_init(&mgr);
+    if (mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL) == NULL) {
+        printf("Failed to listen on port 8000\n");
+        return 1;
     }
+    
+    printf("\n[MOCK] Sentinel Linux Active\n");
+    printf("[MOCK] URL: http://localhost:8000\n\n");
+    
+    engine_init();
+
+    while (s_running) {
+        mg_mgr_poll(&mgr, 10); 
+        engine_tick();
+    }
+    
+    mg_mgr_free(&mgr);
+    printf("\nShutting down...\n");
     return 0;
 }

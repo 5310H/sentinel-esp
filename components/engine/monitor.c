@@ -1,31 +1,25 @@
 #include "monitor.h"
 #include "notifier.h"
 #include "engine.h"
+#include <string.h>
 #include <stdio.h>
 
-static Owner_t* _owner;
-static User_t* _users;
-static int _u_count;
-
-void monitor_init(Owner_t* owner, User_t* users, int u_count) {
-    _owner = owner;
-    _users = users;
-    _u_count = u_count;
-    notifier_init(_owner, _users, _u_count);
+void monitor_init(owner_t *_owner, user_t *_users, int *_u_count) {
+    // notifier_init is now void, so we call it without arguments
+    notifier_init();
+    printf("[MONITOR] System monitor initialized.\n");
 }
 
-void monitor_process_event(int zone_id, const char* zone_name) {
-    int state = engine_get_arm_state();
-    
-    // Log activity regardless of arm state
-    printf("[MONITOR] Zone Activity: %s (ID: %d)\n", zone_name, zone_id);
+void monitor_process_event(const char *event_type, int zone_id) {
+    if (event_type == NULL) return;
 
-    // If Armed (Any mode other than DISARMED), trigger alerts
-    if (state != 0) { // 0 is ARMSTATE_DISARMED in your enum
-        char msg[256];
-        snprintf(msg, sizeof(msg), "SECURITY ALERT: %s triggered!", zone_name);
+    if (strcmp(event_type, "alarm") == 0) {
+        printf("[MONITOR] Processing Alarm Event for Zone %d\n", zone_id);
         
-        notifier_send(NOTIFY_ALARM, msg);
+        // Use our new simplified notifier logic
+        notifier_send(zone_id);
+        
+        // Trigger the physical engine alarm
         engine_trigger_alarm();
     }
 }

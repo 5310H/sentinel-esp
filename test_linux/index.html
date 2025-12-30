@@ -1,257 +1,65 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sentinel Mobile Console</title>
+    <title>Sentinel Mock Dashboard</title>
     <style>
-        :root {
-            --bg-color: #0f0f0f;
-            --panel-bg: #1a1a1a;
-            --accent-green: #00ff00;
-            --accent-red: #ff3333;
-            --btn-gray: #262626;
-        }
-
-        body { 
-            font-family: 'Segoe UI', system-ui, sans-serif; 
-            background: var(--bg-color); 
-            color: #e0e0e0; 
-            margin: 0; 
-            padding: 10px;
-            display: flex;
-            justify-content: center;
-        }
-
-        .panel { 
-            background: var(--panel-bg); 
-            width: 100%; 
-            max-width: 500px; /* Limit width on desktop */
-            padding: 20px; 
-            border-radius: 12px; 
-            border: 1px solid #333; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            box-sizing: border-box;
-        }
-        
-        /* Responsive Display */
-        .display { 
-            background: #000; 
-            color: var(--accent-green); 
-            padding: 25px 10px; 
-            font-family: 'Courier New', monospace; 
-            font-size: clamp(1.2rem, 5vw, 1.8rem); /* Scales with screen size */
-            margin-bottom: 15px; 
-            border-radius: 6px; 
-            border: 1px solid #222; 
-            text-align: center;
-            text-shadow: 0 0 8px var(--accent-green);
-        }
-
-        .alarm-bg { 
-            background: #500; 
-            color: var(--accent-red); 
-            border-color: #ff0000; 
-            text-shadow: 0 0 10px #ff0000; 
-            animation: pulse 1s infinite; 
-        }
-
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-
-        /* Touch-Friendly Grid */
-        .grid { 
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 12px; 
-        }
-
-        button { 
-            padding: 20px; /* Larger hit area for thumbs */
-            background: var(--btn-gray); 
-            color: white; 
-            border: 1px solid #444; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            font-size: 1.2rem; 
-            touch-action: manipulation; /* Prevents double-tap zoom */
-        }
-
-        button:active { background: #444; transform: scale(0.95); }
-
-        .btn-panic { 
-            background: #821717; 
-            grid-column: span 3; 
-            font-weight: bold; 
-            margin-top: 10px; 
-            color: #ffcaca;
-        }
-
-        /* Lists & Tables */
-        .maint-area { 
-            margin-top: 15px; 
-            text-align: left; 
-            background: #141414; 
-            padding: 15px; 
-            border-radius: 8px; 
-            border: 1px solid #282828; 
-        }
-
-        .section-title { 
-            font-size: 0.8rem; 
-            color: #666; 
-            text-transform: uppercase; 
-            letter-spacing: 1.5px; 
-            border-bottom: 1px solid #222; 
-            margin-bottom: 10px; 
-            padding-bottom: 5px; 
-        }
-
-        .row {
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 8px 0;
-            border-bottom: 1px solid #1f1f1f;
-        }
-
-        .tag { 
-            padding: 4px 8px; 
-            border-radius: 4px; 
-            font-size: 0.75rem; 
-            font-weight: bold; 
-        }
-
-        .tripped, .active { background: #d63031; }
-        .secure, .idle { background: #27ae60; }
-
-        .log-box { 
-            background: #050505; 
-            font-size: 0.75rem; 
-            padding: 10px; 
-            height: 120px; 
-            overflow-y: auto; 
-            font-family: monospace; 
-            border: 1px solid #222; 
-            white-space: pre-wrap;
-        }
-
-        /* Mobile specific adjustments */
-        @media (max-width: 400px) {
-            .panel { padding: 15px; border: none; box-shadow: none; }
-            button { padding: 15px; font-size: 1rem; }
-        }
-
-        .hidden { display: none; }
-        input { background: #000; color: #fff; border: 1px solid #333; padding: 10px; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
+        .card { background: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .btn { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; background: #007bff; color: white; }
+        .btn-relay { background: #28a745; }
+        .status-on { color: green; font-weight: bold; }
+        .status-off { color: red; font-weight: bold; }
     </style>
 </head>
 <body>
+    <h1>Sentinel Control Panel</h1>
+    
+    <div class="card">
+        <h3>System Status</h3>
+        <div id="arm-status">Loading...</div>
+    </div>
 
-    <div class="panel">
-        <div id="status-display" class="display">LOCKED</div>
-        
-        <div id="login-view">
-            <div class="grid" id="keypad"></div>
-            <button class="btn-panic" onclick="doPanic()">PANIC ALARM</button>
-        </div>
+    <div class="card">
+        <h3>Zones (Sensors)</h3>
+        <div id="zone-list">No zones found.</div>
+    </div>
 
-        <div id="maint-view" class="hidden">
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
-                <button onclick="doDisarm()" style="background:#218c74; font-size:1rem;">DISARM</button>
-                <button onclick="doArm(2)" style="background:#227093; font-size:1rem;">ARM</button>
-            </div>
-            
-            <div class="maint-area">
-                <div class="section-title">Zones</div>
-                <div id="zone-list"></div>
-            </div>
-
-            <div class="maint-area">
-                <div class="section-title">Relays</div>
-                <div id="relay-list"></div>
-            </div>
-
-            <div class="maint-area">
-                <div class="section-title">Log & Backup</div>
-                <div id="log-view" class="log-box"></div>
-                <a href="/api/history" download style="text-decoration: none;">
-                    <button style="width:100%; margin-top:10px; background:#222; font-size:0.8rem; padding:10px;">💾 DOWNLOAD LOGS</button>
-                </a>
-            </div>
-
-            <button onclick="location.reload()" style="width:100%; margin-top:20px; background: #333;">LOGOUT</button>
-        </div>
+    <div class="card">
+        <h3>Relays (Hardware)</h3>
+        <div id="relay-list">No relays found.</div>
     </div>
 
     <script>
-        let sessionPin = "";
-        const keypad = document.getElementById('keypad');
+        function loadConfig() {
+            fetch('/api/config')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('arm-status').innerText = data.armed ? "ARMED" : "DISARMED";
+                    
+                    // Render Zones
+                    const zoneDiv = document.getElementById('zone-list');
+                    zoneDiv.innerHTML = data.zones.map(z => 
+                        `<div class="card"><b>${z.name}</b> (${z.type}) <button class="btn" onclick="triggerZone(${z.id})">Trigger Alarm</button></div>`
+                    ).join('');
 
-        [1,2,3,4,5,6,7,8,9,'CLR',0,'OK'].forEach(val => {
-            let b = document.createElement('button');
-            b.innerText = val;
-            b.onclick = () => {
-                if(val === 'CLR') sessionPin = "";
-                else if(val === 'OK') submitLogin();
-                else if(sessionPin.length < 6) sessionPin += val;
-                if(val !== 'OK') document.getElementById('status-display').innerText = "*".repeat(sessionPin.length) || "ENTER PIN";
-            };
-            keypad.appendChild(b);
-        });
-
-        async function submitLogin() {
-            const res = await fetch('/api/login', { method: 'POST', body: 'pin='+sessionPin });
-            if(res.ok) {
-                document.getElementById('login-view').classList.add('hidden');
-                document.getElementById('maint-view').classList.remove('hidden');
-                startPolling();
-            } else {
-                sessionPin = "";
-                document.getElementById('status-display').innerText = "DENIED";
-            }
+                    // Render Relays
+                    const relayDiv = document.getElementById('relay-list');
+                    relayDiv.innerHTML = data.relays.map(r => 
+                        `<button class="btn btn-relay">Relay ${r.id} (${r.type})</button>`
+                    ).join('');
+                })
+                .catch(err => {
+                    document.getElementById('arm-status').innerHTML = '<span class="status-off">Error connecting to API</span>';
+                });
         }
 
-        async function doArm(s) { await fetch('/api/arm', {method:'POST', body:'state='+s}); }
-        async function doDisarm() { await fetch('/api/disarm', {method:'POST', body:'pin='+sessionPin}); }
-        async function doPanic() { await fetch('/api/panic', {method:'POST'}); }
-        async function toggleZone(id, c) { await fetch('/api/zone/trigger', {method:'POST', body: `id=${id}&tripped=${!c}`}); }
-
-        function startPolling() {
-            setInterval(async () => {
-                const res = await fetch('/api/config');
-                if (!res.ok) return;
-                const data = await res.json();
-                const disp = document.getElementById('status-display');
-                
-                if(data.arm_state >= 3) {
-                    disp.innerText = "ALARM!";
-                    disp.classList.add('alarm-bg');
-                } else {
-                    disp.innerText = data.arm_state === 0 ? "DISARMED" : "ARMED";
-                    disp.classList.remove('alarm-bg');
-                }
-
-                document.getElementById('zone-list').innerHTML = data.zones.map(z => `
-                    <div class="row">
-                        <span>${z.name}</span>
-                        <span>
-                            <span class="tag ${z.tripped?'tripped':'secure'}">${z.tripped?'TRIP':'OK'}</span>
-                            <button onclick="toggleZone(${z.id}, ${z.tripped})" style="padding:5px 10px; font-size:0.7rem; margin-left:8px;">SIM</button>
-                        </span>
-                    </div>
-                `).join('');
-
-                document.getElementById('relay-list').innerHTML = data.relays.map(r => `
-                    <div class="row">
-                        <span>Relay ${r.id}</span>
-                        <span class="tag ${r.active?'active':'idle'}">${r.active?'ON':'OFF'}</span>
-                    </div>
-                `).join('');
-
-                const logRes = await fetch('/api/history');
-                document.getElementById('log-view').innerText = await logRes.text();
-            }, 1000);
+        function triggerZone(id) {
+            console.log("Triggering zone:", id);
+            alert("Zone " + id + " triggered! Check terminal for MOCK HAL output.");
         }
+
+        // Load data immediately
+        loadConfig();
     </script>
 </body>
 </html>

@@ -1,0 +1,17 @@
+# Exclude the data folder
+data/
+
+# Ignore compiled binaries
+sentinel_test
+*.o
+
+# Ignore Python environment if it's inside the folder
+pythonenv/
+__pycache__/
+
+# Ignore temporary Linux files
+.DS_Store
+*.swp
+*.o
+test_linux/sentinel_test
+test_linux/main_mock.o

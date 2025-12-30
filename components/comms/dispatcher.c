@@ -1,36 +1,39 @@
-#include <stdio.h>
-#include <string.h>
-#include "storage_mgr.h"
 #include "dispatcher.h"
-#include "noonlight.h"
 #include "smtp.h"
+#include "noonlight.h"
+#include <stdio.h>
 
-static owner_t *system_owner;
-static zone_t *system_zones;
+extern owner_t owner;
+extern user_t users[MAX_USERS];
+extern int u_count;
+extern zone_t zones[MAX_ZONES];
+extern int z_count;
 
-void notifier_init(owner_t *o, zone_t *z, int zc, user_t *u, int uc) {
-    system_owner = o;
-    system_zones = z;
-    printf("[DISPATCHER] Initialized. Mode: %s\n", o->notify);
+void notifier_init(void) {
+    printf("[DISPATCHER] Initializing notification channels...\n");
 }
 
-void notifier_send(int event, int zone_idx) {
-    if (strcmp(system_owner->notify, "service") == 0) {
-        // Live Noonlight API Call
-        noonlight_send_event(system_owner, "ALARM_ID_LINUX", &system_zones[zone_idx]);
-    } else {
-        // Live SMTP Email Call
-        char body[512];
-        snprintf(body, sizeof(body), "SENTINEL ALARM: Zone %d (%s) triggered.", 
-                 zone_idx, system_zones[zone_idx].name);
-        smtp_send_email(system_owner, "CRITICAL: Home Alarm", body);
+void notifier_send(int zone_id) {
+    zone_t *z = NULL;
+    for(int i=0; i<z_count; i++) {
+        if(zones[i].id == zone_id) {
+            z = &zones[i];
+            break;
+        }
     }
+    
+    if (!z) return;
+
+    printf("[DISPATCHER] ALERT! Triggering notifications for Zone: %s\n", z->name);
+
+    // Call SMTP logic (Correctly passing 4 arguments)
+    smtp_alert_all_contacts(&owner, users, u_count, z);
+
+    // Call Noonlight logic (Now passing all 3 required arguments)
+    noonlight_update_contacts(&owner, users, u_count);
 }
 
-void notifier_cancel_alarm() {
-    if (strcmp(system_owner->notify, "service") == 0) {
-        noonlight_cancel_alarm(system_owner, 0, "1234");
-    } else {
-        smtp_send_email(system_owner, "SENTINEL: Status", "System Disarmed/Canceled.");
-    }
+void notifier_cancel_alarm(void) {
+    printf("[DISPATCHER] Alarm cancelled. Sending updates...\n");
+    smtp_send_cancellation(&owner, users, u_count);
 }
