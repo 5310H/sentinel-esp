@@ -15,7 +15,7 @@
 
 typedef struct {
     char email[STR_MEDIUM];
-    char notify[STR_SMALL];
+    char notify[STR_SMALL]; // "none", "email", "telegram", "service"
     int pin;
     // Fields for smtp.c
     char smtp_server[STR_MEDIUM];
@@ -27,25 +27,27 @@ typedef struct {
 typedef struct {
     int id;
     char name[STR_MEDIUM];
-    char type[STR_SMALL]; // Required by engine/logic
+    char type[STR_SMALL]; // "fire", "police", "chime"
+    int relay_id;         // --- ADDED: Maps zone to hardware relay ---
+    bool alert_sent;      // --- ADDED: Runtime flag to prevent spam ---
 } zone_t;
 
 typedef struct {
     int id;
-    char type[STR_SMALL];
+    char type[STR_SMALL]; // "alarm" or "chime"
 } relay_t;
 
 typedef struct {
     char name[STR_MEDIUM];
     char pin[STR_SMALL];
-    char email[STR_MEDIUM]; // Required by noonlight/comms
-    char phone[STR_SMALL];  // Fixes the noonlight.c:73 error
+    char email[STR_MEDIUM]; 
+    char phone[STR_SMALL];  
 } user_t;
 
 // Function Prototypes
 void storage_load_all(owner_t *o, zone_t *z, int *zc, user_t *u, int *uc, relay_t *r, int *rc);
 
-// SHARED DATA (Fixes "undefined reference" errors in linker)
+// SHARED DATA 
 extern owner_t owner;
 extern zone_t zones[MAX_ZONES];
 extern user_t users[MAX_USERS];

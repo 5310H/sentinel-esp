@@ -1,65 +1,61 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sentinel Mock Dashboard</title>
+    <title>Sentinel Control Panel</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
-        .card { background: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .btn { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; background: #007bff; color: white; }
-        .btn-relay { background: #28a745; }
-        .status-on { color: green; font-weight: bold; }
-        .status-off { color: red; font-weight: bold; }
+        body { font-family: sans-serif; background: #121212; color: #e0e0e0; padding: 20px; }
+        .card { background: #1e1e1e; padding: 25px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .item { background: #252525; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 6px solid #444; transition: 0.3s; }
+        .violated { border-left-color: #ff5252; background: #331a1a; }
+        .on { border-left-color: #4caf50; background: #1a331a; }
+        .state-text { font-size: 28px; font-weight: bold; margin-bottom: 15px; letter-spacing: 1px; }
+        .ARMED { color: #ff5252; text-shadow: 0 0 10px rgba(255,82,82,0.3); }
+        .DISARMED { color: #4caf50; text-shadow: 0 0 10px rgba(76,175,80,0.3); }
+        button { cursor: pointer; padding: 8px 16px; background: #333; color: white; border: 1px solid #444; border-radius: 6px; font-size: 13px; text-transform: uppercase; }
+        button:hover { background: #444; }
+        h3 { color: #888; text-transform: uppercase; font-size: 14px; margin-top: 30px; letter-spacing: 2px; }
     </style>
 </head>
 <body>
-    <h1>Sentinel Control Panel</h1>
-    
-    <div class="card">
-        <h3>System Status</h3>
-        <div id="arm-status">Loading...</div>
-    </div>
 
     <div class="card">
-        <h3>Zones (Sensors)</h3>
-        <div id="zone-list">No zones found.</div>
+        <div id="st" class="state-text">INITIALIZING...</div>
+        <button onclick="fetch('/api/arm')">Set Away (ARM)</button>
+        <button onclick="fetch('/api/disarm')" style="margin-left:10px;">Stand Down (DISARM)</button>
     </div>
 
-    <div class="card">
-        <h3>Relays (Hardware)</h3>
-        <div id="relay-list">No relays found.</div>
-    </div>
+    <h3>Zones</h3>
+    <div id="zGrid" class="grid"></div>
+
+    <h3>Active Outputs</h3>
+    <div id="rGrid" class="grid"></div>
 
     <script>
-        function loadConfig() {
-            fetch('/api/config')
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('arm-status').innerText = data.armed ? "ARMED" : "DISARMED";
-                    
-                    // Render Zones
-                    const zoneDiv = document.getElementById('zone-list');
-                    zoneDiv.innerHTML = data.zones.map(z => 
-                        `<div class="card"><b>${z.name}</b> (${z.type}) <button class="btn" onclick="triggerZone(${z.id})">Trigger Alarm</button></div>`
-                    ).join('');
+        function update() {
+            fetch('/api/config').then(r => r.json()).then(data => {
+                document.getElementById('st').innerText = data.state;
+                document.getElementById('st').className = 'state-text ' + data.state;
 
-                    // Render Relays
-                    const relayDiv = document.getElementById('relay-list');
-                    relayDiv.innerHTML = data.relays.map(r => 
-                        `<button class="btn btn-relay">Relay ${r.id} (${r.type})</button>`
-                    ).join('');
-                })
-                .catch(err => {
-                    document.getElementById('arm-status').innerHTML = '<span class="status-off">Error connecting to API</span>';
-                });
+                // Render Zones
+                document.getElementById('zGrid').innerHTML = data.zones.map(z => `
+                    <div class="item ${z.violated ? 'violated' : ''}">
+                        <div><b>${z.name}</b><br><small>${z.type}</small></div>
+                        <button onclick="fetch('/api/trigger?id=${z.id}')">Trip</button>
+                    </div>
+                `).join('');
+
+                // Render Relays
+                document.getElementById('rGrid').innerHTML = data.relays.map(r => `
+                    <div class="item ${r.state ? 'on' : ''}">
+                        <div><b>${r.Name}</b><br><small>Hardware ID: ${r.ID}</small></div>
+                        <span>${r.state ? '● ACTIVE' : '○ IDLE'}</span>
+                    </div>
+                `).join('');
+            }).catch(e => { document.getElementById('st').innerText = "OFFLINE"; });
         }
-
-        function triggerZone(id) {
-            console.log("Triggering zone:", id);
-            alert("Zone " + id + " triggered! Check terminal for MOCK HAL output.");
-        }
-
-        // Load data immediately
-        loadConfig();
+        setInterval(update, 1000);
+        update();
     </script>
 </body>
 </html>
