@@ -3,8 +3,16 @@
 
 #include "storage_mgr.h"
 
-void notifier_init(void);
-void notifier_send(int zone_id);
-void notifier_cancel_alarm(void);
+/**
+ * @brief Main entry point for the Engine to report a zone violation.
+ * Handles routing to Noonlight, SMTP, and (eventually) Telegram.
+ */
+void dispatcher_alert(zone_t *z);
 
-#endif
+/**
+ * @brief Called when the system is successfully disarmed.
+ * Sends cancellation/stand-down notices to remote platforms.
+ */
+void dispatcher_cancel_alert(void);
+
+#endif // DISPATCHER_H

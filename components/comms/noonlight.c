@@ -1,146 +1,198 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <curl/curl.h>
-#include "storage_mgr.h"
 #include "noonlight.h"
+#include "cJSON.h"
+#include "storage_mgr.h"
 
-// Static buffer to hold the Alarm ID returned by the Noonlight API
-static char active_alarm_id[128] = {0};
+// The shared alarm ID used to link events/people/cancelations to the current incident
+char active_alarm_id[STR_SMALL] = "";
 
-// Helper function to handle the standard CURL setup for Noonlight
-static CURL* setup_noonlight_curl(struct curl_slist **headers) {
+// --- INTERNAL HELPER: CURL DATA CALLBACK ---
+// This captures the response from Noonlight so we can extract the Alarm ID
+static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    char *response = (char *)userp;
+    // Ensure we don't overflow the buffer (assuming 1024 bytes available)
+    strncat(response, (char *)contents, realsize);
+    return realsize;
+}
+
+// --- INTERNAL HELPER: SETUP CURL ---
+static CURL* setup_noonlight_curl(config_t *conf, struct curl_slist **headers) {
     CURL *curl = curl_easy_init();
     if (curl) {
+        char auth_header[512];
         *headers = curl_slist_append(*headers, "Content-Type: application/json");
-        // In production, you would add your API Key here:
-        // *headers = curl_slist_append(*headers, "Authorization: Bearer YOUR_TOKEN");
+        *headers = curl_slist_append(*headers, "Accept: application/json");
+
+        // Use the MonitorServiceKey from your config as the Bearer Token
+        snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", conf->MonitorServiceKey);
+        *headers = curl_slist_append(*headers, auth_header);
+
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, *headers);
     }
     return curl;
 }
 
-/**
- * 1. CREATE ALARM
- */
-void noonlight_create_alarm(owner_t *o, zone_t *z) {
+// --- 1. CREATE ALARM ---
+bool noonlight_create_alarm(config_t *conf, zone_t *z) {
     CURL *curl;
     struct curl_slist *headers = NULL;
-    curl = setup_noonlight_curl(&headers);
+    char response_buffer[1024] = {0};
+    bool success = false;
+
+    curl = setup_noonlight_curl(conf, &headers);
+    if (curl) {
+        char data[1024];
+        const char *police = (strcmp(z->type, "police") == 0) ? "true" : "false";
+        const char *fire   = (strcmp(z->type, "fire") == 0) ? "true" : "false";
+
+        snprintf(data, sizeof(data), 
+            "{"
+                "\"name\": \"%s\", \"phone\": \"%s\", \"originating_system_id\": \"%s\", "
+                "\"location\": {"
+                    "\"address\": \"%s\", \"city\": \"%s\", \"state\": \"%s\", \"zip\": \"%s\", "
+                    "\"coordinates\": {\"lat\": %.6f, \"lng\": %.6f, \"accuracy\": %d}"
+                "}, "
+                "\"services\": {\"police\": %s, \"fire\": %s}"
+            "}",
+            conf->name, conf->phone, conf->AccountID,
+            conf->street, conf->city, conf->state, conf->zip,
+            conf->Latitude, conf->Longitude, conf->Accuracy,
+            police, fire
+        );
+
+        curl_easy_setopt(curl, CURLOPT_URL, conf->monitoringURL);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)response_buffer);
+
+        printf("[NOONLIGHT] Posting Alarm for: %s\n", z->name);
+        CURLcode res = curl_easy_perform(curl);
+        
+        if (res == CURLE_OK) {
+            cJSON *root = cJSON_Parse(response_buffer);
+            if (root) {
+                cJSON *id = cJSON_GetObjectItem(root, "id");
+                if (id && id->valuestring) {
+                    strncpy(active_alarm_id, id->valuestring, STR_SMALL - 1);
+                    success = true;
+                    printf("[NOONLIGHT] Alarm Success. ID: %s\n", active_alarm_id);
+                }
+                cJSON_Delete(root);
+            }
+        } else {
+            printf("[NOONLIGHT] CURL Error: %s\n", curl_easy_strerror(res));
+        }
+        
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+    }
+    return success;
+}
+
+// --- 2. LOG EVENT ---
+void noonlight_log_event(config_t *conf, zone_t *z) {
+    if (strlen(active_alarm_id) == 0) return;
+
+    CURL *curl;
+    struct curl_slist *headers = NULL;
+    curl = setup_noonlight_curl(conf, &headers);
 
     if (curl) {
-        char data[512];
-        // Note: Noonlight expects a specific JSON body to initiate dispatch
+        char url[256], data[512];
+        snprintf(url, sizeof(url), "%s/%s/events", conf->monitoringURL, active_alarm_id);
+        
         snprintf(data, sizeof(data), 
-            "{\"source\": \"Sentinel-ESP\", \"location\": {\"address\": \"Home\"}, \"services\": {\"police\": true}}");
+            "[{\"event_type\": \"alarm.device.activated_alarm\", "
+            "\"meta\": {\"attribute\": \"%s\", \"value\": \"tripped\", \"device_name\": \"%s\"}}]", 
+            z->type, z->name);
 
-        curl_easy_setopt(curl, CURLOPT_URL, "https://api.noonlight.com/dispatch/v1/alarms");
+        curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
-
-        printf("[NOONLIGHT] API POST: Creating alarm for %s...\n", z->name);
-        CURLcode res = curl_easy_perform(curl);
-
-        if (res == CURLE_OK) {
-            // LIVE LOGIC: In a real integration, we'd parse the JSON response here 
-            // to extract the "id" field. For this simulator, we generate a mock tracking ID.
-            snprintf(active_alarm_id, sizeof(active_alarm_id), "ALARM_%ld", (long)time(NULL));
-            printf("[NOONLIGHT] API SUCCESS: Alarm ID %s saved.\n", active_alarm_id);
-        } else {
-            fprintf(stderr, "[NOONLIGHT] API ERROR: %s\n", curl_easy_strerror(res));
-        }
-
+        curl_easy_perform(curl);
+        
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
     }
 }
 
-/**
- * 2. UPDATE CONTACTS (Instructions)
- */
-void noonlight_update_contacts(owner_t *o, user_t *users, int user_count) {
+// --- 3. SEND INSTRUCTIONS ---
+void noonlight_send_instructions(config_t *conf) {
+    if (strlen(active_alarm_id) == 0 || strlen(conf->instructions) == 0) return;
+
+    CURL *curl;
+    struct curl_slist *headers = NULL;
+    curl = setup_noonlight_curl(conf, &headers);
+
+    if (curl) {
+        char url[256], data[512];
+        snprintf(url, sizeof(url), "%s/%s/instructions", conf->monitoringURL, active_alarm_id);
+        snprintf(data, sizeof(data), "{\"instruction\": \"%s\"}", conf->instructions);
+
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
+        curl_easy_perform(curl);
+        
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+    }
+}
+
+// --- 4. SYNC PEOPLE (BACKUP CONTACTS) ---
+void noonlight_sync_people(config_t *conf, user_t *users_list, int count) {
     if (strlen(active_alarm_id) == 0) return;
 
-    for (int i = 0; i < user_count; i++) {
+    for (int i = 0; i < count; i++) {
         CURL *curl;
         struct curl_slist *headers = NULL;
-        curl = setup_noonlight_curl(&headers);
+        curl = setup_noonlight_curl(conf, &headers);
 
         if (curl) {
-            char url[256];
-            char data[512];
-            // Endpoint to add instructions/contacts to a specific alarm
-            snprintf(url, sizeof(url), "https://api.noonlight.com/dispatch/v1/alarms/%s/instructions", active_alarm_id);
-            snprintf(data, sizeof(data), "{\"type\": \"contact\", \"name\": \"%s\", \"phone\": \"%s\"}", 
-                     users[i].name, users[i].phone);
+            char url[256], data[512];
+            snprintf(url, sizeof(url), "%s/%s/people", conf->monitoringURL, active_alarm_id);
+            snprintf(data, sizeof(data), 
+                "{\"name\": \"%s\", \"phone\": \"%s\", \"pin\": \"%s\"}", 
+                users_list[i].name, users_list[i].phone, users_list[i].pin);
 
             curl_easy_setopt(curl, CURLOPT_URL, url);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
-
-            printf("[NOONLIGHT] API POST: Syncing contact %s...\n", users[i].name);
             curl_easy_perform(curl);
-
+            
             curl_slist_free_all(headers);
             curl_easy_cleanup(curl);
         }
     }
 }
 
-/**
- * 3. UPDATE EVENTS (Timeline)
- */
-void noonlight_update_events(const char *event_msg) {
-    if (strlen(active_alarm_id) == 0) return;
+// --- 5. CANCEL ALARM ---
+bool noonlight_cancel_alarm(config_t *conf, const char *pin) {
+    if (strlen(active_alarm_id) == 0) return false;
 
     CURL *curl;
     struct curl_slist *headers = NULL;
-    curl = setup_noonlight_curl(&headers);
+    curl = setup_noonlight_curl(conf, &headers);
 
     if (curl) {
-        char url[256];
-        char data[512];
-        snprintf(url, sizeof(url), "https://api.noonlight.com/dispatch/v1/alarms/%s/events", active_alarm_id);
-        snprintf(data, sizeof(data), "{\"event_type\": \"dispatched\", \"details\": \"%s\"}", event_msg);
-
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
-
-        printf("[NOONLIGHT] API POST: Logging event: %s\n", event_msg);
-        curl_easy_perform(curl);
-
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-    }
-}
-
-/**
- * 4. CANCEL ALARM
- */
-void noonlight_cancel_alarm(owner_t *o, const char *entered_pin) {
-    if (strlen(active_alarm_id) == 0) return;
-
-    CURL *curl;
-    struct curl_slist *headers = NULL;
-    curl = setup_noonlight_curl(&headers);
-
-    if (curl) {
-        char url[256];
-        // Cancellation is typically a DELETE or a PATCH to status
-        snprintf(url, sizeof(url), "https://api.noonlight.com/dispatch/v1/alarms/%s/status", active_alarm_id);
-        
-        // We simulate the cancel by changing status to 'canceled'
-        char data[128];
-        snprintf(data, sizeof(data), "{\"status\": \"canceled\", \"pin\": \"%s\"}", entered_pin);
+        char url[256], data[128];
+        snprintf(url, sizeof(url), "%s/%s/status", conf->monitoringURL, active_alarm_id);
+        snprintf(data, sizeof(data), "{\"status\": \"canceled\", \"pin\": \"%s\"}", pin);
 
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PATCH");
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
 
-        printf("[NOONLIGHT] API PATCH: Canceling Alarm %s with PIN %s\n", active_alarm_id, entered_pin);
-        curl_easy_perform(curl);
-
-        // Clear the ID so we know we are no longer in an active alarm state
-        memset(active_alarm_id, 0, sizeof(active_alarm_id));
+        CURLcode res = curl_easy_perform(curl);
+        if (res == CURLE_OK) {
+            printf("[NOONLIGHT] Alarm Canceled successfully.\n");
+            memset(active_alarm_id, 0, sizeof(active_alarm_id));
+        }
 
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
+        return (res == CURLE_OK);
     }
+    return false;
 }

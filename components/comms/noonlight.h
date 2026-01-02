@@ -3,13 +3,39 @@
 
 #include "storage_mgr.h"
 
-// Lifecycle Functions
-void noonlight_create_alarm(owner_t *o, zone_t *z);
-void noonlight_update_contacts(owner_t *o, user_t *users, int user_count);
-void noonlight_update_events(const char *event_msg);
-void noonlight_cancel_alarm(owner_t *o, const char *entered_pin);
+// --- GLOBALS ---
+// Stores the ID returned by Noonlight to allow for event logging and cancellation
+extern char active_alarm_id[STR_SMALL];
 
-// High-level bridge for the Dispatcher
-void noonlight_send_event(owner_t *o, const char *msg, zone_t *z);
+// --- CORE API POSTS ---
+
+/**
+ * 1. Creates the initial alarm.
+ * Sets the active_alarm_id on success.
+ */
+bool noonlight_create_alarm(config_t *conf, zone_t *z);
+
+/**
+ * 2. Logs specific zone triggers to the alarm timeline.
+ */
+void noonlight_log_event(config_t *conf, zone_t *z);
+
+/**
+ * 3. Sends dispatch instructions (Gate codes, pet info, etc).
+ */
+void noonlight_send_instructions(config_t *conf);
+
+/**
+ * 4. Syncs the backup contacts (user_t array) to the dispatcher.
+ */
+void noonlight_sync_people(config_t *conf, user_t *users, int count);
+
+// --- ALARM CONTROL ---
+
+/**
+ * Updates the alarm status to "canceled".
+ * Requires the PIN of the person who canceled it.
+ */
+bool noonlight_cancel_alarm(config_t *conf, const char *pin);
 
 #endif

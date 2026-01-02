@@ -3,57 +3,102 @@
 
 #include <stdbool.h>
 
-// String Length Constants
-#define STR_SMALL  16
+// 1. CONSTANTS FIRST (Crucial for the errors you saw)
+#define STR_SMALL  32
 #define STR_MEDIUM 64
-#define STR_LARGE  128
+#define STR_LARGE  256
 
-// Array Size Limits
 #define MAX_ZONES  32
 #define MAX_RELAYS 8
 #define MAX_USERS  10
 
+// 2. STRUCTURE DEFINITIONS
 typedef struct {
+    char name[STR_MEDIUM];
     char email[STR_MEDIUM];
-    char notify[STR_SMALL]; // "none", "email", "telegram", "service"
-    int pin;
-    // Fields for smtp.c
+    char pin[STR_SMALL];
+    char phone[STR_SMALL];
+    char AccountID[STR_SMALL];
+
+    double Latitude;
+    double Longitude;
+    int Accuracy;
+    char street[STR_MEDIUM];
+    char city[STR_SMALL];
+    char state[STR_SMALL];
+    char zip[STR_SMALL];
+    char instructions[STR_LARGE];
+
+    char monitoringURL[STR_MEDIUM];
+    char MonitorServiceKey[STR_LARGE];
+// Monitoring Flags
+    bool MonitorFire;      // Match exactly: MonitorFire
+    bool MonitorPolice;    // Match exactly: MonitorPolice
+    bool MonitorMedical;
+    bool MonitorOther;
+    
+    char Notify[STR_SMALL];
+    int EntryDelay;
+    int ExitDelay;
+    int CancelDelay;
+    int SirenTimeout;
+    int DebounceTime;
+    int HeartbeatInterval;
+
+    char TelegramID[STR_SMALL];
+    char TelegramToken[STR_MEDIUM];
+    bool TelegramEnabled;
+
     char smtp_server[STR_MEDIUM];
     char smtp_user[STR_MEDIUM];
     char smtp_pass[STR_MEDIUM];
     int smtp_port;
-} owner_t;
+} config_t;
+
+typedef config_t owner_t; // Support for dispatcher.c
 
 typedef struct {
     int id;
+    int gpio;
     char name[STR_MEDIUM];
-    char type[STR_SMALL]; // "fire", "police", "chime"
-    int relay_id;         // --- ADDED: Maps zone to hardware relay ---
-    bool alert_sent;      // --- ADDED: Runtime flag to prevent spam ---
+    char description[STR_LARGE]; 
+    char type[STR_SMALL];
+    char mfg[STR_SMALL];
+    char model[STR_SMALL];
+    int relay_id;
+    bool chime;                  
+    bool alarm_on_armed_only;    
+    bool is_perimeter;           
+    bool is_interior;            
+    bool is_panic;               
+    bool alert_sent;             
 } zone_t;
 
 typedef struct {
     int id;
-    char type[STR_SMALL]; // "alarm" or "chime"
+    int gpio;
+    char name[STR_MEDIUM];
+    char description[STR_MEDIUM];
+    char type[STR_SMALL];
+    bool active_high;             
 } relay_t;
 
 typedef struct {
     char name[STR_MEDIUM];
     char pin[STR_SMALL];
-    char email[STR_MEDIUM]; 
-    char phone[STR_SMALL];  
+    char email[STR_MEDIUM];
+    char phone[STR_SMALL];
 } user_t;
 
-// Function Prototypes
-void storage_load_all(owner_t *o, zone_t *z, int *zc, user_t *u, int *uc, relay_t *r, int *rc);
+// 3. GLOBAL EXTERN DECLARATIONS
+extern config_t config;
+#define owner config
 
-// SHARED DATA 
-extern owner_t owner;
 extern zone_t zones[MAX_ZONES];
 extern user_t users[MAX_USERS];
 extern relay_t relays[MAX_RELAYS];
-extern int z_count;
-extern int u_count;
-extern int r_count;
+extern int z_count, u_count, r_count;
+
+void storage_load_all(void);
 
 #endif
