@@ -18,7 +18,7 @@
 
 <div class="card">
     <h2>Status: <span id="sysState">--</span></h2>
-    <p>Owner: <strong id="owner">--</strong></p>
+    <p>config: <strong id="config">--</strong></p>
     <button class="btn btn-arm" onclick="cmd('arm')">ARM SYSTEM</button>
     <button class="btn btn-disarm" onclick="cmd('disarm')">DISARM</button>
 </div>
@@ -41,18 +41,18 @@
     function update() {
         fetch('/api/config').then(r => r.json()).then(data => {
             document.getElementById('sysState').innerText = data.state;
-            document.getElementById('owner').innerText = data.owner;
+            document.getElementById('config').innerText = data.config;
 
             document.getElementById('zGrid').innerHTML = data.zones.map(z => `
                 <div class="item ${z.violated ? 'active' : ''}">
-                    <div><strong>${z.Name}</strong><br><small>${z.Type}</small></div>
-                    <button class="btn btn-trip" onclick="trigger(${z.ID})">TRIP</button>
+                    <div><strong>${z.name}</strong><br><small>${z.type}</small></div>
+                    <button class="btn btn-trip" onclick="trigger(${z.id})">TRIP</button>
                 </div>
             `).join('');
 
             document.getElementById('rGrid').innerHTML = data.relays.map(r => `
                 <div class="item ${r.state ? 'active' : ''}">
-                    <div><strong>${r.Name}</strong></div>
+                    <div><strong>${r.name}</strong></div>
                     <span>${r.state ? '● ON' : '○ OFF'}</span>
                 </div>
             `).join('');

@@ -4,7 +4,7 @@
 
 char payload_buffer[1024];
 
-void payload_build_noonlight(struct owner *o, struct zone *z, bool is_update) {
+void payload_build_noonlight(struct config *o, struct zone *z, bool is_update) {
     if (!is_update) {
         snprintf(payload_buffer, 1024, "{\"service_id\":\"%s\",\"location\":{\"address\":{\"line1\":\"%s\"}}}",
                  o->MonitorServiceID, o->address1);
@@ -14,12 +14,12 @@ void payload_build_noonlight(struct owner *o, struct zone *z, bool is_update) {
     }
 }
 
-void payload_build_telegram(struct owner *o, struct zone *z) {
+void payload_build_telegram(struct config *o, struct zone *z) {
     snprintf(payload_buffer, 1024, "{\"chat_id\":\"%s\",\"text\":\"Alarm: %s\"}",
              o->telegramChatID, z->location);
 }
 
-void payload_build_smtp(struct owner *o, struct zone *z, struct contact *c) {
+void payload_build_smtp(struct config *o, struct zone *z, struct contact *c) {
     (void)o; // Silence warning
     snprintf(payload_buffer, 1024, "To: %s\r\nSubject: Alert\r\n\r\n%s", c->phone, z->description);
 }

@@ -9,11 +9,11 @@
 #define NOONLIGHT_TOKEN     "YOUR_TOKEN"
 #define NOONLIGHT_URL       "https://api-sandbox.noonlight.com/dispatch/v1/alarms"
 
-static Owner_t* _owner = NULL;
+static config_t* _owner = NULL;
 static User_t* _users = NULL;
 static int _u_count = 0;
 
-void notifier_init(Owner_t* owner_ptr, User_t* users_ptr, int u_count) {
+void notifier_init(config_t* owner_ptr, User_t* users_ptr, int u_count) {
     _owner = owner_ptr;
     _users = users_ptr;
     _u_count = u_count;
@@ -24,7 +24,7 @@ void notifier_send(NotifyType_t type, const char* message) {
     if (type == NOTIFY_ALARM && _owner) {
         CURL *curl = curl_easy_init();
         if(curl) {
-            struct curl_slist *headers = curl_slist_append(NULL, "Content-Type: application/json");
+            struct curl_slist *headers = curl_slist_append(NULL, "Content-type: application/json");
             char auth[256]; snprintf(auth, sizeof(auth), "Authorization: Bearer %s", NOONLIGHT_TOKEN);
             headers = curl_slist_append(headers, auth);
 
@@ -34,7 +34,7 @@ void notifier_send(NotifyType_t type, const char* message) {
                 "{\"name\":\"%s\",\"phone\":\"%s\","
                 "\"location\":{\"address\":{\"line1\":\"%s\",\"city\":\"%s\",\"state\":\"%s\",\"zip\":\"%s\"}},"
                 "\"note\":\"%s\"}", 
-                _owner->Name, _owner->Phone, _owner->Address1, _owner->City, _owner->State, _owner->ZipCode,
+                _owner->name, _owner->Phone, _owner->Address1, _owner->City, _owner->State, _owner->ZipCode,
                 message);
 
             curl_easy_setopt(curl, CURLOPT_URL, NOONLIGHT_URL);

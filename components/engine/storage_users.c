@@ -10,8 +10,8 @@ bool storage_save_users(User_t* users, int count) {
 
     for (int i = 0; i < count; i++) {
         cJSON *u = cJSON_CreateObject();
-        cJSON_AddNumberToObject(u, "ID", users[i].ID);
-        cJSON_AddStringToObject(u, "Name", users[i].Name);
+        cJSON_AddNumberToObject(u, "id", users[i].id);
+        cJSON_AddStringToObject(u, "name", users[i].name);
         cJSON_AddStringToObject(u, "PIN", users[i].PIN);
         cJSON_AddBoolToObject(u, "IsAdmin", users[i].IsAdmin);
         // We include these because they are in config.h

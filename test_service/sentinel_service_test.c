@@ -6,8 +6,8 @@
 int main() {
     printf("=== STARTING SENTINEL SERVICE TEST ===\n");
 
-    // 1. Setup Mock Owner with Credentials
-    struct owner my_home = {
+    // 1. Setup Mock config with Credentials
+    struct config my_home = {
         .name = "kjgerhart",
         .phone = "2165551212",
         .pin = "1234",
@@ -39,12 +39,12 @@ int main() {
     printf("\n--- SCENARIO: INITIAL TRIGGER (Front Door) ---\n");
     noonlight_handle_trigger(&my_home, &front_door, list, 2);
 
-    // Verify ID was captured
+    // Verify id was captured
     char *police_id = noonlight_get_active_id(SLOT_POLICE);
     if (police_id != NULL) {
-        printf("\nVERIFICATION: Police Alarm Active with ID: %s\n", police_id);
+        printf("\nVERIFICATION: Police Alarm Active with id: %s\n", police_id);
     } else {
-        printf("\nVERIFICATION FAILED: No Police ID captured.\n");
+        printf("\nVERIFICATION FAILED: No Police id captured.\n");
         return 1;
     }
 

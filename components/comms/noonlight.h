@@ -4,7 +4,7 @@
 #include "storage_mgr.h"
 
 // --- GLOBALS ---
-// Stores the ID returned by Noonlight to allow for event logging and cancellation
+// Stores the id returned by Noonlight to allow for event logging and cancellation
 extern char active_alarm_id[STR_SMALL];
 
 // --- CORE API POSTS ---

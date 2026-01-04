@@ -34,7 +34,7 @@ typedef enum {
 typedef struct {
     char AccountID[64];
     int PIN;
-    char Name[64];
+    char name[64];
     char Address1[64];
     char Address2[64];
     char City[32];
@@ -70,11 +70,11 @@ typedef struct {
     int EntryDelay;
     int ExitDelay;
     int CancelDelay;
-} Owner_t;
+} _t;
 
 typedef struct {
-    int ID;
-    char Name[32];
+    int id;
+    char name[32];
     char PIN[8];
     char Phone[20];
     char Email[64];
@@ -83,10 +83,10 @@ typedef struct {
 } User_t;
 
 typedef struct {
-    int ID;
-    char Name[32];
+    int id;
+    char name[32];
     char Description[64];
-    char Type[16];           // fire, police, medical, other
+    char type[16];           // fire, police, medical, other
     char Location[32];
     char Model[32];
     char Manufacturer[32];
@@ -101,24 +101,24 @@ typedef struct {
 } Zone_t;
 
 typedef struct {
-    int ID;
-    char Name[32];
+    int id;
+    char name[32];
     char Description[64];
     int DurationSec;
     char Location[32];
-    char Type[16];           // siren, strobe, light, lock
+    char type[16];           // siren, strobe, light, lock
     bool Repeat;
     int PinNumber;
 } Relay_t;
 
 typedef struct {
-    int ID;
-    char Name[32];
+    int id;
+    char name[32];
     bool Enabled;
-    int TriggerZoneID;       // Link to Zone_t.ID
+    int TriggerZoneID;       // Link to Zone_t.id
     char TriggerCondition[16]; // "open", "closed"
     ArmState_t RequiredState; // Only run if in this state
-    int ActionRelayID;       // Link to Relay_t.ID
+    int ActionRelayID;       // Link to Relay_t.id
     int ActionType;          // 0:Toggle, 1:Momentary
     int DurationSec;
 } Rule_t;

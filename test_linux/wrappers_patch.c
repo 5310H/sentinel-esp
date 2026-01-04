@@ -1,6 +1,6 @@
 void __wrap_hal_set_relay(int id, bool state) {
     if (id >= 0 && id < 16) relay_states[id] = state;
-    printf("[HAL-RELAY] ID: %d | STATE: %s\n", id, state ? "ON" : "OFF");
+    printf("[HAL-RELAY] id: %d | STATE: %s\n", id, state ? "ON" : "OFF");
 }
 
 void __wrap_hal_set_siren(bool state) {

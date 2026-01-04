@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Admin",
+    "pin": "1234",
+    "phone": "4404652865",
+    "email": "online@trahreg.com",
+    "notify": "none"
+  },
+  {
+    "name": "User1",
+    "pin": "5678",
+    "phone": "14404652865",
+    "email": "2020@trahreg.com",
+    "notify": "none"
+  }
+]

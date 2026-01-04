@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "name": "External Siren",
+    "description": "External Siren",
+    "durationSec": 60,
+    "location": "Outside Northside",
+    "type": "alarm",
+    "isRepeat": false,
+    "gpio": 2
+  },
+  {
+    "id": 2,
+    "name": "Internal Siren",
+    "description": "Internal Sounder",
+    "durationSec": 320,
+    "location": "Furnace Ceiling",
+    "type": "alarm",
+    "isRepeat": true,
+    "gpio": 4
+  },
+  {
+    "id": 3,
+    "name": "Chime",
+    "description": "Activity chiime",
+    "durationSec": 30,
+    "location": "_",
+    "type": "chime",
+    "isRepeat": false,
+    "gpio": 15
+  }
+]

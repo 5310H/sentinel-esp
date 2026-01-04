@@ -1679,7 +1679,7 @@ bool mg_to_size_t(struct mg_str str, size_t *val) {
 // abcdef
 // --xyz
 // Content-Disposition: form-data; name="foo"; filename="a.txt"
-// Content-Type: text/plain
+// Content-type: text/plain
 //
 // hello world
 //
@@ -1775,7 +1775,7 @@ int mg_http_get_var(const struct mg_str *buf, const char *name, char *dst,
   } else {
     struct mg_str v = mg_http_var(*buf, mg_str(name));
     if (v.buf == NULL) {
-      len = -4;  // Name does not exist
+      len = -4;  // name does not exist
     } else {
       len = mg_url_decode(v.buf, v.len, dst, dst_len, 1);
       if (len < 0) len = -3;  // Failed to decode
@@ -2035,7 +2035,7 @@ static const char *mg_http_status_code_str(int status_code) {
     case 412: return "Precondition Failed";
     case 413: return "Payload Too Large";
     case 414: return "Request-URI Too Long";
-    case 415: return "Unsupported Media Type";
+    case 415: return "Unsupported Media type";
     case 416: return "Requested Range Not Satisfiable";
     case 417: return "Expectation Failed";
     case 418: return "I'm a teapot";
@@ -2268,7 +2268,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     }
     mg_printf(c,
               "HTTP/1.1 %d %s\r\n"
-              "Content-Type: %.*s\r\n"
+              "Content-type: %.*s\r\n"
               "Etag: %s\r\n"
               "Content-Length: %llu\r\n"
               "%s%s%s\r\n",
@@ -2371,7 +2371,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
 
   mg_printf(c,
             "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html; charset=utf-8\r\n"
+            "Content-type: text/html; charset=utf-8\r\n"
             "%s"
             "Content-Length:         \r\n\r\n",
             opts->extra_headers == NULL ? "" : opts->extra_headers);
@@ -2381,7 +2381,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "<style>th,td {text-align: left; padding-right: 1em; "
             "font-family: monospace; }</style></head>"
             "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
-            "<tr><th><a href=\"#\" rel=\"0\">Name</a></th><th>"
+            "<tr><th><a href=\"#\" rel=\"0\">name</a></th><th>"
             "<a href=\"#\" rel=\"1\">Modified</a></th>"
             "<th><a href=\"#\" rel=\"2\">Size</a></th></tr>"
             "<tr><td colspan=\"3\"><hr></td></tr>"
@@ -4019,7 +4019,7 @@ static int mqtt_prop_type_by_id(uint8_t prop_id) {
   for (i = 0; i < num_properties; ++i) {
     if (s_prop_map[i].id == prop_id) return s_prop_map[i].type;
   }
-  return -1;  // Property ID not found
+  return -1;  // Property id not found
 }
 
 // Returns the size of the properties section, without the
@@ -4606,7 +4606,7 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       }
       if (n > 14) return false;
       addr->addr.ip[n] = addr->addr.ip[n + 1] = 0;  // For trailing ::
-    } else if (str.buf[i] == '%') {                 // Scope ID, last in string
+    } else if (str.buf[i] == '%') {                 // Scope id, last in string
       if (mg_str_to_num(mg_str_n(&str.buf[i + 1], str.len - i - 1), 10,
                         &addr->scope_id, sizeof(uint8_t))) {
         addr->is_ip6 = true;
@@ -5231,8 +5231,8 @@ static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
   uint8_t *p = opts;
   assert(olen <= sizeof(opts));
   memset(opts, 0, sizeof(opts));
-  *p++ = 53, *p++ = 1, *p++ = 3;                       // Type: DHCP request
-  *p++ = 54, *p++ = 4, memcpy(p, &ip_srv, 4), p += 4;  // DHCP server ID
+  *p++ = 53, *p++ = 1, *p++ = 3;                       // type: DHCP request
+  *p++ = 54, *p++ = 4, memcpy(p, &ip_srv, 4), p += 4;  // DHCP server id
   *p++ = 50, *p++ = 4, memcpy(p, &ip_req, 4), p += 4;  // Requested IP
   *p++ = 12, *p++ = (uint8_t) (len & 255);             // DHCP host
   memcpy(p, ifp->dhcp_name, len), p += len;            // name
@@ -5250,7 +5250,7 @@ static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
 static void tx_dhcp_request_re(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
                                uint32_t ip_src, uint32_t ip_dst) {
   uint8_t opts[] = {
-      53, 1, 3,  // Type: DHCP request
+      53, 1, 3,  // type: DHCP request
       255        // End of options
   };
   tx_dhcp(ifp, l2_dst, ip_src, ip_dst, opts, sizeof(opts), true);
@@ -5259,7 +5259,7 @@ static void tx_dhcp_request_re(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
 
 static void tx_dhcp_discover(struct mg_tcpip_if *ifp) {
   uint8_t opts[] = {
-      53, 1, 1,     // Type: DHCP discover
+      53, 1, 1,     // type: DHCP discover
       55, 2, 1, 3,  // Parameters: ip, mask
       255           // End of options
   };
@@ -5386,7 +5386,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     } else if (p[0] == 51 && p[1] == 4 && p + 6 < end) {  // Lease
       memcpy(&lease, p + 2, sizeof(lease));
       lease = mg_ntohl(lease);
-    } else if (p[0] == 53 && p[1] == 1 && p + 6 < end) {  // Msg Type
+    } else if (p[0] == 53 && p[1] == 1 && p + 6 < end) {  // Msg type
       msgtype = p[2];
     }
     p += p[1] + 2;
@@ -5448,7 +5448,7 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     uint8_t opts[] = {
         53, 1, 0,                   // Message type
         1,  4, 0,   0,   0,   0,    // Subnet mask
-        54, 4, 0,   0,   0,   0,    // Server ID
+        54, 4, 0,   0,   0,   0,    // Server id
         12, 3, 'm', 'i', 'p',       // Host name: "mip"
         51, 4, 255, 255, 255, 255,  // Lease time
         255                         // End of options
@@ -11055,7 +11055,7 @@ fail:
 
 void mg_http_serve_ssi(struct mg_connection *c, const char *root,
                        const char *fullpath) {
-  const char *headers = "Content-Type: text/html; charset=utf-8\r\n";
+  const char *headers = "Content-type: text/html; charset=utf-8\r\n";
   char *data = mg_ssi(fullpath, root, 0);
   if (data == NULL) {
     mg_error(c, "OOM");
@@ -12457,14 +12457,14 @@ int mg_aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
 
 #if MG_TLS == MG_TLS_BUILTIN
 
-/* TLS 1.3 Record Content Type (RFC8446 B.1) */
+/* TLS 1.3 Record Content type (RFC8446 B.1) */
 #define MG_TLS_CHANGE_CIPHER 20
 #define MG_TLS_ALERT 21
 #define MG_TLS_HANDSHAKE 22
 #define MG_TLS_APP_DATA 23
 #define MG_TLS_HEARTBEAT 24
 
-/* TLS 1.3 Handshake Message Type (RFC8446 B.3) */
+/* TLS 1.3 Handshake Message type (RFC8446 B.3) */
 #define MG_TLS_CLIENT_HELLO 1
 #define MG_TLS_SERVER_HELLO 2
 #define MG_TLS_ENCRYPTED_EXTENSIONS 8
@@ -12520,7 +12520,7 @@ struct tls_data {
   mg_sha256_ctx sha256;  // incremental SHA-256 hash for TLS handshake
 
   uint8_t random[32];      // client random from ClientHello
-  uint8_t session_id[32];  // client session ID between the handshake states
+  uint8_t session_id[32];  // client session id between the handshake states
   uint8_t x25519_cli[32];  // client X25519 key between the handshake states
   uint8_t x25519_sec[32];  // x25519 secret between the handshake states
 
@@ -12639,7 +12639,7 @@ static int mg_der_find_oid(struct mg_der_tlv *tlv, const uint8_t *oid,
 
 #if 0
 static void mg_der_debug(struct mg_der_tlv *tlv, int depth) {
-  MG_DEBUG(("> %.*sd=%d Type: 0x%02X, Length: %u\n", depth * 4, " ", depth,
+  MG_DEBUG(("> %.*sd=%d type: 0x%02X, Length: %u\n", depth * 4, " ", depth,
             tlv->type, tlv->len));
 
   if (tlv->type & 0x20) {  // Constructed: recurse into children
@@ -13091,7 +13091,7 @@ static bool mg_tls_server_send_hello(struct mg_connection *c) {
       0x02, 0x00, 0x00, 0x76, 0x03, 0x03,
       // random (32 bytes)
       PLACEHOLDER_32B,
-      // session ID length + session ID (32 bytes)
+      // session id length + session id (32 bytes)
       0x20, PLACEHOLDER_32B,
 #if MG_ENABLE_CHACHA20
       // TLS_CHACHA20_POLY1305_SHA256 + no compression
@@ -13116,7 +13116,7 @@ static bool mg_tls_server_send_hello(struct mg_connection *c) {
   mg_tls_x25519(tls->x25519_sec, x25519_prv, tls->x25519_cli, 1);
   mg_tls_hexdump("s x25519 sec", tls->x25519_sec, sizeof(tls->x25519_sec));
 
-  // fill in the gaps: random + session ID + keyshare
+  // fill in the gaps: random + session id + keyshare
   memmove(msg_server_hello + 6, tls->random, sizeof(tls->random));
   memmove(msg_server_hello + 39, tls->session_id, sizeof(tls->session_id));
   memmove(msg_server_hello + 84, x25519_pub, sizeof(x25519_pub));
@@ -13314,7 +13314,7 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
       0x01, 0x00, 0x00, 0x8c, 0x03, 0x03,
       // random (32 bytes)
       PLACEHOLDER_32B,
-      // session ID length + session ID (32 bytes)
+      // session id length + session id (32 bytes)
       0x20, PLACEHOLDER_32B, 0x00,
       0x02,  // size = 2 bytes
 #if MG_ENABLE_CHACHA20
@@ -13365,7 +13365,7 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
   if (!mg_random(tls->x25519_cli, sizeof(tls->x25519_cli))) mg_error(c, "RNG");
   mg_tls_x25519(x25519_pub, tls->x25519_cli, X25519_BASE_POINT, 1);
 
-  // fill in the gaps: random + session ID + keyshare
+  // fill in the gaps: random + session id + keyshare
   if (!mg_random(tls->session_id, sizeof(tls->session_id))) mg_error(c, "RNG");
   if (!mg_random(tls->random, sizeof(tls->random))) mg_error(c, "RNG");
   memmove(msg_client_hello + 11, tls->random, sizeof(tls->random));
@@ -16281,7 +16281,7 @@ typedef struct _bigint bigint; /**< An alias for _bigint */
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT config OR
  * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
  * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
@@ -16402,7 +16402,7 @@ typedef struct _BI_CTX BI_CTX;
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT config OR
  * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
  * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
@@ -16495,7 +16495,7 @@ NS_INTERNAL bigint *bi_square(BI_CTX *ctx, bigint *bi);
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT config OR
  * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
  * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
@@ -23958,7 +23958,7 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
 
   id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
   id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
-  MG_INFO(("PHY ID: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
+  MG_INFO(("PHY id: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
 
   if (id1 == MG_PHY_DP83x && id2 == MG_PHY_DP83867) {
     phy->write_reg(phy_addr, 0x0d, 0x1f);  // write 0x10d to IO_MUX_CFG (0x0170)

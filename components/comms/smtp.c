@@ -15,12 +15,12 @@
  * - SMTPS handshake and SSL/TLS requirement.
  * - Credential authentication.
  * - Payload formatting using fmemopen to simulate a file stream.
- * * @param owner Pointer to system owner containing server config and credentials.
+ * * @param config Pointer to system config containing server config and credentials.
  * @param target_email The recipient's email address.
  * @param subject The email subject line.
  * @param body The main message content.
  */
-static void smtp_execute_send(owner_t *owner, const char *target_email, const char *subject, const char *body) {
+static void smtp_execute_send(config_t *config, const char *target_email, const char *subject, const char *body) {
     CURL *curl = curl_easy_init();
     if (!curl) return;
 
@@ -28,14 +28,14 @@ static void smtp_execute_send(owner_t *owner, const char *target_email, const ch
     char url[256];
     
     // Construct SMTPS URL (e.g., smtps://smtp.gmail.com:465)
-    snprintf(url, sizeof(url), "smtps://%s:%d", owner->smtp_server, owner->smtp_port);
+    snprintf(url, sizeof(url), "smtps://%s:%d", config->smtpserver, config->smtpport);
 
     // Set server and authentication details
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_USERNAME, owner->smtp_user);
-    curl_easy_setopt(curl, CURLOPT_PASSWORD, owner->smtp_pass);
+    curl_easy_setopt(curl, CURLOPT_USERNAME, config->smtpuser);
+    curl_easy_setopt(curl, CURLOPT_PASSWORD, config->smtppass);
     curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-    curl_easy_setopt(curl, CURLOPT_MAIL_FROM, owner->smtp_user);
+    curl_easy_setopt(curl, CURLOPT_MAIL_FROM, config->smtpuser);
 
     // Add recipient to the envelope
     recipients = curl_slist_append(recipients, target_email);
@@ -45,7 +45,7 @@ static void smtp_execute_send(owner_t *owner, const char *target_email, const ch
     char payload[2048];
     snprintf(payload, sizeof(payload),
              "To: %s\r\nFrom: %s\r\nSubject: %s\r\n\r\n%s",
-             target_email, owner->smtp_user, subject, body);
+             target_email, config->smtpuser, subject, body);
 
     // Provide payload to curl via a memory stream (fmemopen)
     FILE *temp = fmemopen((void*)payload, strlen(payload), "r");
@@ -67,33 +67,33 @@ static void smtp_execute_send(owner_t *owner, const char *target_email, const ch
 }
 
 /**
- * @brief Orchestrates a mass-alert to the owner and all secondary users.
+ * @brief Orchestrates a mass-alert to the config and all secondary users.
  * * Called by the dispatcher when a zone breach is detected.
  */
-void smtp_alert_all_contacts(owner_t *owner, user_t *users, int user_count, zone_t *z) {
+void smtp_alert_all_contacts(config_t *config, user_t *users, int user_count, zone_t *z) {
     char subject[256];
     char body[512];
     snprintf(subject, sizeof(subject), "CRITICAL: Sentinel Alarm - %s", z->name);
     snprintf(body, sizeof(body), "Breach detected in %s. Local authorities or Noonlight may be notified.", z->name);
 
-    // First, notify the owner
-    smtp_execute_send(owner, owner->email, subject, body);
+    // First, notify the config
+    smtp_execute_send(config, config->email, subject, body);
 
     // Second, loop through the authorized user list
     for (int i = 0; i < user_count; i++) {
-        smtp_execute_send(owner, users[i].email, subject, body);
+        smtp_execute_send(config, users[i].email, subject, body);
     }
 }
 
 /**
  * @brief Notifies all parties that the alarm state has ended.
  */
-void smtp_send_cancellation(owner_t *owner, user_t *users, int user_count) {
+void smtp_send_cancellation(config_t *config, user_t *users, int user_count) {
     const char *subject = "Sentinel Status: Alarm Cancelled";
     const char *body = "The emergency alarm has been disarmed and cancelled.";
 
-    smtp_execute_send(owner, owner->email, subject, body);
+    smtp_execute_send(config, config->email, subject, body);
     for (int i = 0; i < user_count; i++) {
-        smtp_execute_send(owner, users[i].email, subject, body);
+        smtp_execute_send(config, users[i].email, subject, body);
     }
 }

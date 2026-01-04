@@ -28,14 +28,14 @@ char* read_file_to_buffer(const char* filename) {
     return data;
 }
 
-void storage_load_owner(owner_t *obj) {
-    char *data = read_file_to_buffer("../data/owner.json");
+void storage_load_owner(config_t *obj) {
+    char *data = read_file_to_buffer("../data/config.json");
     if (!data) return;
     cJSON *root = cJSON_Parse(data);
     if (root) {
         cJSON *item;
         if ((item = cJSON_GetObjectItem(root, "Notify"))) strncpy(obj->notify, item->valuestring, STR_SMALL - 1);
-        if ((item = cJSON_GetObjectItem(root, "Name"))) strncpy(obj->name, item->valuestring, STR_MEDIUM - 1);
+        if ((item = cJSON_GetObjectItem(root, "name"))) strncpy(obj->name, item->valuestring, STR_MEDIUM - 1);
         if ((item = cJSON_GetObjectItem(root, "Email"))) strncpy(obj->email, item->valuestring, STR_MEDIUM - 1);
         if ((item = cJSON_GetObjectItem(root, "SMTPServer"))) strncpy(obj->smtp_server, item->valuestring, STR_MEDIUM - 1);
         if ((item = cJSON_GetObjectItem(root, "SMTPPort"))) obj->smtp_port = item->valueint;
@@ -65,8 +65,8 @@ void storage_load_users(user_t *u, int *count) {
         cJSON *element = NULL;
         cJSON_ArrayForEach(element, root) {
             if (found < MAX_USER) {
-                // Use the exact keys from your snippet: "Name" and "Phone"
-                cJSON *name = cJSON_GetObjectItem(element, "Name");
+                // Use the exact keys from your snippet: "name" and "Phone"
+                cJSON *name = cJSON_GetObjectItem(element, "name");
                 cJSON *phone = cJSON_GetObjectItem(element, "Phone");
                 
                 if (name && phone) {
@@ -75,7 +75,7 @@ void storage_load_users(user_t *u, int *count) {
                     printf("[STORAGE] Successfully Parsed User: %s\n", u[found].name);
                     found++;
                 } else {
-                    printf("[STORAGE] Warning: Element missing Name or Phone key\n");
+                    printf("[STORAGE] Warning: Element missing name or Phone key\n");
                 }
             }
         }

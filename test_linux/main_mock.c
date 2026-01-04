@@ -1,149 +1,139 @@
 #include <stdio.h>
 #include <stdbool.h>
-#include <unistd.h>
 #include <string.h>
-#include <signal.h>
+#include <unistd.h>
 #include <stdlib.h>
-
-#include "storage_mgr.h"
-#include "mongoose.h"
 #include "engine.h"
+#include "storage_mgr.h"
+#include "dispatcher.h"
+#include "monitor.h"
+#include "mongoose.h"
 
-// Globals from component objects
-extern zone_t zones[MAX_ZONES];
-extern int z_count;
-extern relay_t relays[MAX_RELAYS]; 
-extern int r_count;
-extern config_t config;             
-extern user_t users[MAX_USERS];
-extern int u_count;
+// FIX: Global mock flag for dispatcher
+int is_mock = 1; 
 
-static bool s_running = true;
+//static int last_engine_state = -1;
+// Initialize all pins to false (not tripped)
+static bool mock_gpio_pins[100] = {false}; 
 struct mg_mgr mgr;
 
-static bool mock_zone_violated[MAX_ZONES] = {false};
-static bool mock_relay_state[MAX_RELAYS] = {false};
-static int last_engine_state = -1;
-
-void handle_sigint(int sig) { s_running = false; }
-
-// --- HAL WRAPPERS ---
-int digitalRead(int pin) {
-    for(int i = 0; i < z_count; i++) {
-        if(zones[i].gpio == pin) return mock_zone_violated[i] ? 0 : 1;
-    }
-    return 1;
+// --- HAL MOCKS ---
+// Returns 0 (LOW/Tripped) or 1 (HIGH/OK)
+int digitalRead(int pin) { 
+    if (pin < 0 || pin >= 100) return 1;
+    return mock_gpio_pins[pin] ? 0 : 1; 
 }
 
-void __wrap_hal_set_relay(int id, bool state) {
-    for(int i = 0; i < r_count; i++) {
-        if(relays[i].id == id) {
-            mock_relay_state[i] = state;
-            printf("\n>>> [HAL] RELAY %d (%s) -> %s <<<\n", id, relays[i].name, state ? "ON" : "OFF");
-        }
-    }
-}
-// Add this to your mock file so engine.o can find it
-void __wrap_hal_set_siren(bool state) {
-    printf("\n[MOCK HAL] SIREN state changed to: %s\n", state ? "ON" : "OFF");
+void __wrap_hal_set_siren(bool state) { 
+    printf("\n>>> [HAL] SIREN: %s <<<\n", state ? "ON" : "OFF"); 
 }
 
-// Add these to main_mock.c to satisfy monitor.o
-void notifier_init(void) {
-    // printf("[MOCK] Notifier initialized (Redirected to Dispatcher logic)\n");
+void __wrap_hal_set_relay(int id, bool state) { 
+    printf("[HAL] Relay %d: %s\n", id, state ? "ACTIVE" : "INACTIVE"); 
 }
 
-void notifier_send(void *data) {
-    // If you want monitor to actually trigger alerts:
-    // dispatcher_alert((zone_t *)data);
-    printf("[MOCK] Notifier send called.\n");
-}
+void __wrap_hal_set_strobe(bool state) { }
+int __wrap_hal_get_zone_state(int gpio) { return digitalRead(gpio); }
+int __wrap_hal_get_relay_state(int id) { return 0; }
 
-void __wrap_hal_set_strobe(bool state) {
-    printf("[MOCK HAL] STROBE state changed to: %s\n", state ? "ON" : "OFF");
-}
-// --- WEB API HANDLER ---
+// --- WEB HANDLER ---
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-        const char *headers = "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n";
 
-        // TRIGGER ZONE
-        if (mg_match(hm->uri, mg_str("/api/trigger"), NULL)) {
-            char id_str[10];
-            if (mg_http_get_var(&hm->query, "id", id_str, sizeof(id_str)) > 0) {
-                int z_id = atoi(id_str);
-                for(int i=0; i<z_count; i++) {
-                    if(zones[i].id == z_id) {
-                        mock_zone_violated[i] = true;
-                        printf("[API] Triggered: %s\n", zones[i].name);
-                    }
-                }
-            }
-            mg_http_reply(c, 200, headers, "{\"status\":\"ok\"}");
-        } 
-        // ARM SYSTEM
-        else if (mg_match(hm->uri, mg_str("/api/arm"), NULL)) {
-            printf("[API] Arming System...\n");
-            engine_arm(1); 
-            mg_http_reply(c, 200, headers, "{\"status\":\"success\"}");
-        } 
-        // DISARM SYSTEM
-        else if (mg_match(hm->uri, mg_str("/api/disarm"), NULL)) {
-            printf("[API] Disarming System...\n");
-            engine_disarm(config.pin); 
-            for(int i=0; i<MAX_ZONES; i++) mock_zone_violated[i] = false;
-            mg_http_reply(c, 200, headers, "{\"status\":\"success\"}");
-        } 
-        // CONFIG SYNC
-        else if (mg_match(hm->uri, mg_str("/api/config"), NULL)) {
-            char z_list[4096] = "", r_list[2048] = "";
+        // 1. API: STATUS / CONFIG
+        if (mg_strcmp(hm->uri, mg_str("/api/config")) == 0 || mg_strcmp(hm->uri, mg_str("/api/status")) == 0) {
+            int state = engine_get_arm_state();
+            static char buf[8192];
+            memset(buf, 0, sizeof(buf));
+
+            int len = snprintf(buf, sizeof(buf), 
+                "{\"success\":true,\"state\":%d,\"config\":\"%s\",\"zones\":[", 
+                state, (config.name[0] != '\0') ? config.name : "Test config");
+
             for (int i = 0; i < z_count; i++) {
-                char tmp[512];
-                snprintf(tmp, sizeof(tmp), "{\"ID\":%d,\"Name\":\"%s\",\"Type\":\"%s\",\"violated\":%s}",
-                    zones[i].id, zones[i].name, zones[i].type, mock_zone_violated[i] ? "true" : "false");
-                strcat(z_list, tmp);
-                if (i < z_count - 1) strcat(z_list, ",");
+                int is_violated = (digitalRead(zones[i].gpio) == 0);
+                if (i > 0) len += snprintf(buf + len, sizeof(buf) - len, ",");
+                
+                len += snprintf(buf + len, sizeof(buf) - len, 
+                    "{\"id\":%d,\"name\":\"%s\",\"type\":\"%s\",\"gpio\":%d,\"violated\":%s}", 
+                    i + 1, 
+                    (zones[i].name[0] != '\0') ? zones[i].name : "Unnamed", 
+                    (zones[i].type[0] != '\0') ? zones[i].type : "police", 
+                    zones[i].gpio,
+                    is_violated ? "true" : "false");
             }
+
+            len += snprintf(buf + len, sizeof(buf) - len, "],\"relays\":[");
             for (int i = 0; i < r_count; i++) {
-                char tmp[512];
-                snprintf(tmp, sizeof(tmp), "{\"ID\":%d,\"Name\":\"%s\",\"state\":%s}",
-                    relays[i].id, relays[i].name, mock_relay_state[i] ? "true" : "false");
-                strcat(r_list, tmp);
-                if (i < r_count - 1) strcat(r_list, ",");
+                if (i > 0) len += snprintf(buf + len, sizeof(buf) - len, ",");
+                len += snprintf(buf + len, sizeof(buf) - len,
+                    "{\"id\":%d,\"name\":\"%s\",\"state\":%d}", 
+                    relays[i].id, 
+                    (relays[i].name[0] != '\0') ? relays[i].name : "Relay", 0);
             }
-            int cur_state = engine_get_arm_state();
-            const char* states[] = {"DISARMED", "ARMING", "ARMED", "ENTRY_DELAY", "ALARMED"};
-            mg_http_reply(c, 200, headers, "{\"state\":\"%s\",\"zones\":[%s],\"relays\":[%s],\"owner\":\"%s\"}",
-                states[cur_state], z_list, r_list, config.name);
-        } else {
-            struct mg_http_serve_opts opts = { .root_dir = "." };
+
+            strcat(buf, "]}");
+            mg_http_reply(c, 200, "Content-type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s", buf);
+        }
+        // 2. API: ARM
+        else if (mg_strcmp(hm->uri, mg_str("/api/arm")) == 0) {
+            engine_arm(1);
+            mg_http_reply(c, 200, "Content-type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "{\"success\":true}");
+        }
+        // 3. API: DISARM
+        else if (mg_strcmp(hm->uri, mg_str("/api/disarm")) == 0) {
+            engine_disarm(config.pin);
+            mg_http_reply(c, 200, "Content-type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "{\"success\":true}");
+        }
+        // 4. API: TRIGGER (The critical logic)
+        else if (mg_strcmp(hm->uri, mg_str("/api/trigger")) == 0) {
+            char id_str[10] = {0};
+            mg_http_get_var(&hm->query, "id", id_str, sizeof(id_str));
+            int id = atoi(id_str);
+            
+            if (id > 0 && id <= z_count) {
+                int gpio = zones[id-1].gpio;
+                // Toggle the mock state
+                mock_gpio_pins[gpio] = !mock_gpio_pins[gpio];
+                printf("[MOCK] Request Zone %d -> GPIO %d is now %s\n", 
+                        id, gpio, mock_gpio_pins[gpio] ? "LOW (Tripped)" : "HIGH (OK)");
+            }
+            mg_http_reply(c, 200, "Content-type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "{\"success\":true}");
+        }
+        else {
+            struct mg_http_serve_opts opts = {.root_dir = "."}; 
             mg_http_serve_dir(c, hm, &opts);
         }
     }
 }
 
 int main(void) {
-    mg_log_set(MG_LL_NONE); 
-    signal(SIGINT, handle_sigint);
-    storage_load_all();
-    engine_init();
-    mg_mgr_init(&mgr);
-    if (mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL) == NULL) return 1;
-    
-    printf("\n[SENTINEL MOCK] ALARM SYSTEM RUNNING\n");
+    mg_log_set(0);
+    storage_load_all(); 
+    storage_debug_print();
 
-    while (s_running) {
-        mg_mgr_poll(&mgr, 50);
+    // CRITICAL DEBUG: Print GPIO mappings to terminal on boot
+    printf("[DEBUG] Zone Mapping Check:\n");
+    for(int i=0; i<z_count; i++) {
+        printf("  Zone %d: %s on GPIO %d\n", i+1, zones[i].name, zones[i].gpio);
+    }
+
+    engine_init();
+    monitor_init();
+
+    mg_mgr_init(&mgr);
+    if (mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL) == NULL) {
+        printf("Failed to listen\n");
+        return 1;
+    }
+
+    printf("[SYSTEM] Dashboard live at http://localhost:8000\n");
+
+    while (1) {
+        mg_mgr_poll(&mgr, 10); 
         engine_tick();
-        for(int i = 0; i < z_count; i++) {
-            if (mock_zone_violated[i]) {
-                static int timers[MAX_ZONES] = {0};
-                if (++timers[i] > 40) { mock_zone_violated[i] = false; timers[i] = 0; }
-            }
-        }
         usleep(10000); 
     }
-    mg_mgr_free(&mgr);
     return 0;
 }

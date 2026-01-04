@@ -191,7 +191,7 @@ extern "C" {
 
 #ifndef MG_SET_MAC_ADDRESS
 // Construct MAC address from UUID
-#define MGUID ((uint32_t *) UID_BASE)  // Unique 96-bit chip ID
+#define MGUID ((uint32_t *) UID_BASE)  // Unique 96-bit chip id
 #define MG_SET_MAC_ADDRESS(mac)                                   \
   do {                                                            \
     int icache_enabled_ = HAL_ICACHE_IsEnabled();                 \
@@ -1655,7 +1655,7 @@ enum {
   MG_EV_MDNS_PTR,   // mDNS PTR record request      struct mg_mdns_req *
   MG_EV_MDNS_SRV,   // mDNS SRV record request      struct mg_mdns_req *
   MG_EV_MDNS_TXT,   // mDNS TXT record request      struct mg_mdns_req *
-  MG_EV_USER        // Starting ID for user events
+  MG_EV_USER        // Starting id for user events
 };
 
 
@@ -1679,7 +1679,7 @@ struct mg_addr {
     uint64_t ip6[2];
   } addr;
   uint16_t port;     // TCP or UDP port in network byte order
-  uint8_t scope_id;  // IPv6 scope ID
+  uint8_t scope_id;  // IPv6 scope id
   bool is_ip6;       // True when address is IPv6 address
 };
 
@@ -1689,7 +1689,7 @@ struct mg_mgr {
   struct mg_dns dns6;           // DNS for IPv6
   int dnstimeout;               // DNS resolve timeout in milliseconds
   bool use_dns6;                // Use DNS6 server by default, see #1532
-  unsigned long nextid;         // Next connection ID
+  unsigned long nextid;         // Next connection id
   void *userdata;               // Arbitrary user data pointer
   void *tls_ctx;                // TLS context shared by all TLS sessions
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
@@ -1710,7 +1710,7 @@ struct mg_connection {
   struct mg_addr loc;             // Local address
   struct mg_addr rem;             // Remote address
   void *fd;                       // Connected socket, or LWIP data
-  unsigned long id;               // Auto-incrementing unique connection ID
+  unsigned long id;               // Auto-incrementing unique connection id
   struct mg_iobuf recv;           // Incoming data
   struct mg_iobuf send;           // Outgoing data
   struct mg_iobuf prof;           // Profile data enabled by MG_ENABLE_PROFILE
@@ -2888,7 +2888,7 @@ struct mg_mqtt_prop {
 struct mg_mqtt_opts {
   struct mg_str user;               // Username, can be empty
   struct mg_str pass;               // Password, can be empty
-  struct mg_str client_id;          // Client ID
+  struct mg_str client_id;          // Client id
   struct mg_str topic;              // message/subscription topic
   struct mg_str message;            // message content
   uint8_t qos;                      // message quality of service
@@ -2941,14 +2941,14 @@ size_t mg_mqtt_next_prop(struct mg_mqtt_message *, struct mg_mqtt_prop *,
 // Therefore, we expect zero or one answer.
 // If `resolved` is true, then `addr` contains resolved IPv4 or IPV6 address.
 struct mg_dns_message {
-  uint16_t txnid;       // Transaction ID
+  uint16_t txnid;       // Transaction id
   bool resolved;        // Resolve successful, addr is set
   struct mg_addr addr;  // Resolved address
   char name[256];       // Host name
 };
 
 struct mg_dns_header {
-  uint16_t txnid;  // Transaction ID
+  uint16_t txnid;  // Transaction id
   uint16_t flags;
   uint16_t num_questions;
   uint16_t num_answers;
@@ -2958,7 +2958,7 @@ struct mg_dns_header {
 
 // DNS resource record
 struct mg_dns_rr {
-  uint16_t nlen;    // Name or pointer length
+  uint16_t nlen;    // name or pointer length
   uint16_t atype;   // Address type
   uint16_t aclass;  // Address class
   uint16_t alen;    // Address length
@@ -3238,7 +3238,7 @@ enum {
   MG_TCPIP_EV_DRIVER,   // Driver event                   driver specific
   MG_TCPIP_EV_ST6_CHG,  // state6 change                  uint8_t *
                         // (&ifp->state6)
-  MG_TCPIP_EV_USER      // Starting ID for user events
+  MG_TCPIP_EV_USER      // Starting id for user events
 };
 
 // Network interface
@@ -3260,7 +3260,7 @@ struct mg_tcpip_if {
   mg_tcpip_event_handler_t fn;     // User-specified event handler function
   struct mg_mgr *mgr;              // Mongoose event manager
   struct mg_queue recv_queue;      // Receive queue
-  char dhcp_name[MG_TCPIP_DHCPNAME_SIZE];  // Name for DHCP, "mip" if unset
+  char dhcp_name[MG_TCPIP_DHCPNAME_SIZE];  // name for DHCP, "mip" if unset
   uint16_t mtu;                            // Interface link payload
   uint16_t framesize;                      // Interface frame max length
 #if MG_ENABLE_IPV6

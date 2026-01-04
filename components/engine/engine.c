@@ -7,26 +7,35 @@
 #include "dispatcher.h"
 
 // --- Global State Variables ---
-int s_arm_state = 0;      // 0: Disarmed, 1: Arming, 2: Armed, 3: Entry Delay, 4: Alarmed
-int s_timer = 0;          // Seconds remaining for Entry/Exit delays
-int s_chime_timer = 0;    // Pulse/Debounce for chimes
+int s_arm_state = 0;      
+int s_timer = 0;          
+int s_chime_timer = 0;    
 
 extern int digitalRead(int pin);
 extern void __wrap_hal_set_relay(int id, bool state);
 extern void __wrap_hal_set_siren(bool state);
 
-// --- LOCAL HARDWARE ACTION ---
-// This replaces the old scattered relay/siren calls.
-// It ensures local protection is active BEFORE the network call starts.
-void trigger_local_hardware(zone_t *z) {
-    printf("[LOCAL] !!! ALARM !!! %s triggered. Engaging hardware...\n", z->name);
-    
-    // 1. Fire the specific relay tied to this zone (from JSON)
-    if (z->relay_id > 0) {
-        __wrap_hal_set_relay(z->relay_id, true);
+// --- HARDWARE ABSTRACTION ---
+// This handles both standard GPIO and the new I2C logic from your JSON
+static bool is_zone_tripped(int index) {
+    if (zones[index].isi2c) {
+        // Future: Add I2C bus read logic here using zones[index].i2caddress
+        // For now, it returns false (not tripped) to prevent ghost alarms
+        return false; 
     }
+    return (digitalRead(zones[index].gpio) == 0);
+}
+
+// --- LOCAL HARDWARE ACTION ---
+void trigger_local_hardware(zone_t *z) {
+    printf("[LOCAL] !!! ALARM !!! %s (Type: %s) triggered.\n", z->name, z->type);
     
-    // 2. Fire the Global Siren
+    // Decoupled Relay Lookup: Find all relays of type "alarm"
+    for (int r = 0; r < r_count; r++) {
+        if (strcmp(relays[r].type, "alarm") == 0) {
+            __wrap_hal_set_relay(relays[r].id, true);
+        }
+    }
     __wrap_hal_set_siren(true);
 }
 
@@ -34,12 +43,11 @@ void trigger_local_hardware(zone_t *z) {
 void process_alarm_event(int index) {
     if (index < 0 || index >= z_count) return;
 
+    // Gatekeeper: Only alert once per zone per alarm cycle
     if (!zones[index].alert_sent) {
-        // STEP 1: Local Functions Completed First
-        trigger_local_hardware(&zones[index]);
+        printf("[ENGINE] Dispatching alert for Zone %d: %s\n", index + 1, zones[index].name);
         
-        // STEP 2: Hand off to the Dispatcher
-        // The Engine is now done; the Dispatcher decides if it goes to Noonlight, SMTP, etc.
+        trigger_local_hardware(&zones[index]);
         dispatcher_alert(&zones[index]); 
         
         zones[index].alert_sent = true; 
@@ -47,71 +55,76 @@ void process_alarm_event(int index) {
 }
 
 // --- SYSTEM-WIDE TRIGGER ---
-void engine_trigger_alarm(void) {
+void engine_trigger_alarm(int trigger_index) {
     if (s_arm_state != 4) { 
         s_arm_state = 4;
-        printf("[ENGINE] State Change -> ALARMED (Global Latch Engaged)\n");
-
-        // Identify which zone(s) caused the latch
-        for (int i = 0; i < z_count; i++) {
-            if (digitalRead(zones[i].gpio) == 0) {
-                process_alarm_event(i);
-            }
-        }
+        printf("[STATE] -> ALARMED (Initial Trigger: %s)\n", zones[trigger_index].name);
     }
+    process_alarm_event(trigger_index);
 }
 
-// --- STATE MACHINE & TICK LOGIC ---
+// --- CORE TICK LOGIC ---
 void engine_tick(void) {
-    // 1. Monitor All Zones
-    for (int i = 0; i < z_count; i++) {
-        bool is_tripped = (digitalRead(zones[i].gpio) == 0);
-
-        if (is_tripped) {
-            // A. CHIME LOGIC (Only in Disarmed state)
-            if (zones[i].chime && s_arm_state == 0 && s_chime_timer == 0) {
-                printf("[EVENT] Chime: %s\n", zones[i].name);
-                if (zones[i].relay_id > 0) __wrap_hal_set_relay(zones[i].relay_id, true);
-                s_chime_timer = 50; 
-            }
-            
-            // B. 24-HOUR ZONES (Smoke/CO/Panic) - Triggers regardless of Arm State
-            if (!zones[i].alarm_on_armed_only) {
-                engine_trigger_alarm();
-            }
-            
-            // C. INTRUSION ZONES (Only if fully ARMED)
-            if (s_arm_state == 2) { 
-                if (zones[i].is_perimeter) {
-                    printf("[ENGINE] Perimeter Breach: %s. Entry Delay started.\n", zones[i].name);
-                    s_arm_state = 3; 
-                    s_timer = config.EntryDelay;
-                } else if (zones[i].is_interior) {
-                    engine_trigger_alarm();
+    // 1. Timers
+    if (s_timer > 0) s_timer--;
+    
+    if (s_chime_timer > 0) {
+        s_chime_timer--;
+        if (s_chime_timer == 0 && s_arm_state == 0) {
+            // Find chime relays and turn them off when timer expires
+            for (int r = 0; r < r_count; r++) {
+                if (strcmp(relays[r].type, "chime") == 0) {
+                    __wrap_hal_set_relay(relays[r].id, false);
                 }
             }
         }
     }
 
-    // 2. Process Timers and State Transitions
-    if (s_timer > 0) s_timer--;
-    if (s_chime_timer > 0) s_chime_timer--;
+    // 2. Monitor Zones Individually
+    for (int i = 0; i < z_count; i++) {
+        bool is_tripped = is_zone_tripped(i);
 
-    switch (s_arm_state) {
-        case 1: // ARMING (Exit Delay)
-            if (s_timer == 0) {
-                s_arm_state = 2; // ARMED
-                printf("[ENGINE] System ARMED.\n");
+        if (is_tripped) {
+            // A. 24-HOUR ZONES (Fire/Smoke/Panic)
+            if (!zones[i].isalarmonarmedonly) {
+                engine_trigger_alarm(i);
+                continue; 
             }
-            break;
 
-        case 3: // ENTRY DELAY
-            if (s_timer == 0) {
-                engine_trigger_alarm(); // Time's up
+            // B. CHIME (Only if Disarmed)
+            if (s_arm_state == 0 && zones[i].ischime && s_chime_timer == 0) {
+                printf("[EVENT] Chime: %s\n", zones[i].name);
+                for (int r = 0; r < r_count; r++) {
+                    if (strcmp(relays[r].type, "chime") == 0) {
+                        __wrap_hal_set_relay(relays[r].id, true);
+                    }
+                }
+                s_chime_timer = 50; 
             }
-            break;
+            
+            // C. INTRUSION (Only if Armed)
+            if (s_arm_state == 2) { 
+                if (zones[i].isperimeter) {
+                    s_arm_state = 3; 
+                    s_timer = config.entrydelay;
+                    printf("[ENGINE] Entry Delay Started by %s\n", zones[i].name);
+                } else if (zones[i].isinterior) {
+                    engine_trigger_alarm(i);
+                }
+            }
+        }
+    }
 
-        default: break;
+    // 3. State Transitions
+    if (s_arm_state == 1 && s_timer == 0) {
+        s_arm_state = 2; 
+        printf("[STATE] -> SYSTEM ARMED\n");
+    }
+
+    if (s_arm_state == 3 && s_timer == 0) {
+        for (int i = 0; i < z_count; i++) {
+            if (is_zone_tripped(i)) engine_trigger_alarm(i);
+        }
     }
 }
 
@@ -119,40 +132,35 @@ void engine_tick(void) {
 
 void engine_init(void) {
     s_arm_state = 0;
-    printf("[ENGINE] Core initialized. Mapping %d zones to HAL.\n", z_count);
+    s_timer = 0;
+    s_chime_timer = 0;
+    printf("[ENGINE] Logic initialized.\n");
 }
 
 void engine_arm(int state) {
-    if (state == 1) { // Request to Arm
-        printf("[ENGINE] Arming... Starting Exit Delay (%ds).\n", config.ExitDelay);
+    if (s_arm_state == 0) { 
         s_arm_state = 1;
-        s_timer = config.ExitDelay;
+        s_timer = config.exitdelay;
+        printf("[ENGINE] Arming... Exit Delay: %ds\n", config.exitdelay);
     }
 }
 
 void engine_disarm(const char* pin) {
     if (strcmp(pin, config.pin) == 0) {
-        printf("[ENGINE] PIN Verified. Disarming.\n");
-        
-        // If disarming from an active alarm, notify Dispatcher to cancel remote services
-        if (s_arm_state == 4) {
-            dispatcher_cancel_alert();
-        }
-
+        printf("[ENGINE] DISARMED. Resetting state.\n");
         s_arm_state = 0;
         s_timer = 0;
-        
-        // Local Hardware Reset
         __wrap_hal_set_siren(false);
+        
         for (int i = 0; i < z_count; i++) {
-            zones[i].alert_sent = false;
-            if (zones[i].relay_id > 0) __wrap_hal_set_relay(zones[i].relay_id, false);
+            zones[i].alert_sent = false; 
         }
-    } else {
-        printf("[ENGINE] Invalid PIN entered.\n");
+
+        // Global Reset: Turn off all relays on disarm
+        for (int r = 0; r < r_count; r++) {
+            __wrap_hal_set_relay(relays[r].id, false);
+        }
     }
 }
 
-int engine_get_arm_state(void) {
-    return s_arm_state;
-}
+int engine_get_arm_state(void) { return s_arm_state; }

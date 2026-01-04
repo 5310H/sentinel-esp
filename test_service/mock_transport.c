@@ -18,7 +18,7 @@ void transport_send(int slot) {
     bool ok = payload_parse_response(slot, mock_responses[slot], captured_id);
     
     if (ok) {
-        printf("[MOCK HW] Response Success. ID: %s\n", captured_id);
+        printf("[MOCK HW] Response Success. id: %s\n", captured_id);
         dispatch_on_callback(slot, true, captured_id);
     }
 }

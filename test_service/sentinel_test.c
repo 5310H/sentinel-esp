@@ -6,7 +6,7 @@
 int main() {
     printf("--- SENTINEL STARTUP: SAFETY CHECK ---\n");
 
-    owner_t my_home = {0};
+    config_t my_home = {0};
     zone_t my_zones[MAX_ZONES] = {0};
     user_t my_users[MAX_USER] = {0};
     int user_count = 0;

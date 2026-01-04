@@ -1,9 +1,10 @@
 #ifndef MONITOR_H
 #define MONITOR_H
 
-#include "storage_mgr.h"
-
-void monitor_init(owner_t *_owner, user_t *_users, int *_u_count);
-void monitor_process_event(const char *event_type, int zone_id);
+// FIX: Changed from (const char *, int) to just (int index)
+// to match the implementation in monitor.c
+void monitor_process_event(int index);
+void monitor_init(void);
+void monitor_scan_all(void);
 
 #endif
