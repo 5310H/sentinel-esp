@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "storage_mgr.h"
+#include "user_mgr.h"
 #include "cJSON.h"
 
 config_t config;
@@ -42,6 +43,42 @@ static char* read_file(const char* filename) {
     fclose(f);
     return data;
 }
+void storage_save_users(void) {
+    cJSON *root = cJSON_CreateArray();
+    if (!root) return;
+
+    for (int i = 0; i < u_count; i++) {
+        cJSON *item = cJSON_CreateObject();
+        
+        cJSON_AddStringToObject(item, "name", users[i].name);
+        cJSON_AddStringToObject(item, "pin", users[i].pin);
+        cJSON_AddStringToObject(item, "phone", users[i].phone);
+        cJSON_AddStringToObject(item, "email", users[i].email);
+        
+        // Save notify as an integer (0, 1, 2, 3)
+        cJSON_AddNumberToObject(item, "notify", users[i].notify);
+        
+        // Save is_admin as a true/false boolean
+        cJSON_AddBoolToObject(item, "is_admin", users[i].is_admin);
+
+        cJSON_AddItemToArray(root, item);
+    }
+
+    char *json_str = cJSON_Print(root);
+    if (json_str) {
+        FILE *f = fopen("data/users.json", "w");
+        if (f) {
+            fputs(json_str, f);
+            fclose(f);
+            printf("[STORAGE] users.json updated successfully (%d users).\n", u_count);
+        } else {
+            printf("[STORAGE] Error: Could not open data/users.json for writing!\n");
+        }
+        free(json_str);
+    }
+
+    cJSON_Delete(root);
+}
 
 void storage_load_all() {
     char *data;
@@ -52,7 +89,7 @@ void storage_load_all() {
     //    printf("%s\n", data);
         root = cJSON_Parse(data);
         if (root) {
-            safe_strncpy(config.accountid, cJSON_GetObjectItem(root, "accountid"), STR_SMALL);
+            safe_strncpy(config.account_id, cJSON_GetObjectItem(root, "account_id"), STR_SMALL);
             
             cJSON *p = cJSON_GetObjectItem(root, "pin");
             if (p && p->type == cJSON_Number) sprintf(config.pin, "%d", p->valueint);
@@ -63,7 +100,7 @@ void storage_load_all() {
             safe_strncpy(config.address2, cJSON_GetObjectItem(root, "address2"), STR_MEDIUM);
             safe_strncpy(config.city, cJSON_GetObjectItem(root, "city"), STR_SMALL);
             safe_strncpy(config.state, cJSON_GetObjectItem(root, "state"), STR_SMALL);
-            safe_strncpy(config.zipcode, cJSON_GetObjectItem(root, "zipcode"), STR_SMALL);
+            safe_strncpy(config.zip_code, cJSON_GetObjectItem(root, "zip_code"), STR_SMALL);
             safe_strncpy(config.email, cJSON_GetObjectItem(root, "email"), STR_MEDIUM);
             safe_strncpy(config.phone, cJSON_GetObjectItem(root, "phone"), STR_SMALL);
             safe_strncpy(config.instructions, cJSON_GetObjectItem(root, "instructions"), STR_LARGE);
@@ -73,42 +110,42 @@ void storage_load_all() {
             config.accuracy = safe_get_int(cJSON_GetObjectItem(root, "accuracy"), 5);
 
             // Monitoring
-            safe_strncpy(config.monitorserviceid, cJSON_GetObjectItem(root, "monitorserviceid"), STR_MEDIUM);
-            if(strlen(config.monitorserviceid) == 0) safe_strncpy(config.monitorserviceid, cJSON_GetObjectItem(root, "monitorserviceif"), STR_MEDIUM);
-            safe_strncpy(config.monitorservicekey, cJSON_GetObjectItem(root, "monitorservicekey"), STR_MEDIUM);
-            safe_strncpy(config.monitoringurl, cJSON_GetObjectItem(root, "monitoringurl"), STR_MEDIUM);
-            safe_strncpy(config.notify, cJSON_GetObjectItem(root, "notify"), STR_SMALL);
+            safe_strncpy(config.monitor_service_id, cJSON_GetObjectItem(root, "monitor_service_id"), STR_MEDIUM);
+            if(strlen(config.monitor_service_id) == 0) safe_strncpy(config.monitor_service_id, cJSON_GetObjectItem(root, "monitor_service_id"), STR_MEDIUM);
+            safe_strncpy(config.monitor_service_key, cJSON_GetObjectItem(root, "monitor_service_key"), STR_MEDIUM);
+            safe_strncpy(config.monitoring_url, cJSON_GetObjectItem(root, "monitoring_url"), STR_MEDIUM);
+            config.notify = safe_get_int(cJSON_GetObjectItem(root, "notify"), 0);
 
-            config.monitorfire = safe_get_bool(cJSON_GetObjectItem(root, "monitorfire"));
-            config.monitorpolice = safe_get_bool(cJSON_GetObjectItem(root, "monitorpolice"));
-            config.monitormedical = safe_get_bool(cJSON_GetObjectItem(root, "monitormedical"));
-            config.monitorother = safe_get_bool(cJSON_GetObjectItem(root, "monitorother"));
+            config.is_monitor_fire = safe_get_bool(cJSON_GetObjectItem(root, "is_monitor_fire"));
+            config.is_monitor_police = safe_get_bool(cJSON_GetObjectItem(root, "is_monitor_police"));
+            config.is_monitor_medical = safe_get_bool(cJSON_GetObjectItem(root, "is_monito_medical"));
+            config.is_monitor_other = safe_get_bool(cJSON_GetObjectItem(root, "is_monitor_other"));
 
             // SMTP
-            safe_strncpy(config.smtpserver, cJSON_GetObjectItem(root, "smtpserver"), STR_MEDIUM);
-            config.smtpport = safe_get_int(cJSON_GetObjectItem(root, "smtpport"), 587);
-            safe_strncpy(config.smtpuser, cJSON_GetObjectItem(root, "smtpuser"), STR_MEDIUM);
-            safe_strncpy(config.smtppass, cJSON_GetObjectItem(root, "smtppass"), STR_MEDIUM);
+            safe_strncpy(config.smtp_server, cJSON_GetObjectItem(root, "smtp_server"), STR_MEDIUM);
+            config.smtp_port = safe_get_int(cJSON_GetObjectItem(root, "smtp_port"), 587);
+            safe_strncpy(config.smtp_user, cJSON_GetObjectItem(root, "smtp_user"), STR_MEDIUM);
+            safe_strncpy(config.smtp_pass, cJSON_GetObjectItem(root, "smtp_pass"), STR_MEDIUM);
 
             // MQTT
-            safe_strncpy(config.mqttserver, cJSON_GetObjectItem(root, "mqttserver"), STR_MEDIUM);
-            config.mqttport = safe_get_int(cJSON_GetObjectItem(root, "mqttport"), 1883);
-            safe_strncpy(config.mqttuser, cJSON_GetObjectItem(root, "mqttuser"), STR_SMALL);
-            safe_strncpy(config.mqttpass, cJSON_GetObjectItem(root, "mqttpass"), STR_SMALL);
+            safe_strncpy(config.mqtt_server, cJSON_GetObjectItem(root, "mqtt_server"), STR_MEDIUM);
+            config.mqtt_port = safe_get_int(cJSON_GetObjectItem(root, "mqtt_port"), 1883);
+            safe_strncpy(config.mqtt_user, cJSON_GetObjectItem(root, "mqtt_user"), STR_SMALL);
+            safe_strncpy(config.mqtt_pass, cJSON_GetObjectItem(root, "mqtt_pass"), STR_SMALL);
 
             // Telegram
-            safe_strncpy(config.telegramid, cJSON_GetObjectItem(root, "telegramid"), STR_SMALL);
-            safe_strncpy(config.telegramtoken, cJSON_GetObjectItem(root, "telegramtoken"), STR_MEDIUM);
-            config.istelegramenabled = safe_get_bool(cJSON_GetObjectItem(root, "istelegramenabled"));
+            safe_strncpy(config.telegram_id, cJSON_GetObjectItem(root, "telegram_id"), STR_SMALL);
+            safe_strncpy(config.telegram_token, cJSON_GetObjectItem(root, "telegram_token"), STR_MEDIUM);
+            config.is_telegram_enabled = safe_get_bool(cJSON_GetObjectItem(root, "is_telegram_enabled"));
 
             // URLs
-            safe_strncpy(config.nvrserverURL, cJSON_GetObjectItem(root, "nvrserverURL"), STR_MEDIUM);
-            safe_strncpy(config.haintegrationURL, cJSON_GetObjectItem(root, "haintegrationURL"), STR_MEDIUM);
+            safe_strncpy(config.nvrserver_url, cJSON_GetObjectItem(root, "nvrserver_url"), STR_MEDIUM);
+            safe_strncpy(config.haintegration_url, cJSON_GetObjectItem(root, "haintegration_url"), STR_MEDIUM);
 
             // Timers
-            config.entrydelay = safe_get_int(cJSON_GetObjectItem(root, "entrydelay"), 30);
-            config.exitdelay = safe_get_int(cJSON_GetObjectItem(root, "exitdelay"), 60);
-            config.canceldelay = safe_get_int(cJSON_GetObjectItem(root, "canceldelay"), 10);
+            config.entry_delay = safe_get_int(cJSON_GetObjectItem(root, "entry_delay"), 30);
+            config.exit_delay = safe_get_int(cJSON_GetObjectItem(root, "exit_delay"), 60);
+            config.cancel_delay = safe_get_int(cJSON_GetObjectItem(root, "cancel_delay"), 10);
 
             cJSON_Delete(root);
         }
@@ -125,10 +162,10 @@ void storage_load_all() {
             relays[r_count].id = safe_get_int(cJSON_GetObjectItem(item, "id"), 0);
             safe_strncpy(relays[r_count].name, cJSON_GetObjectItem(item, "name"), STR_MEDIUM);
             safe_strncpy(relays[r_count].description, cJSON_GetObjectItem(item, "description"), STR_MEDIUM);
-            relays[r_count].durationSec = safe_get_int(cJSON_GetObjectItem(item, "durationSec"), 0);
+            relays[r_count].duration = safe_get_int(cJSON_GetObjectItem(item, "duration"), 0);
             safe_strncpy(relays[r_count].location, cJSON_GetObjectItem(item, "location"), STR_MEDIUM);
             safe_strncpy(relays[r_count].type, cJSON_GetObjectItem(item, "type"), STR_SMALL);
-            relays[r_count].isrepeat = safe_get_bool(cJSON_GetObjectItem(item, "isrepeat"));
+            relays[r_count].is_repeat = safe_get_bool(cJSON_GetObjectItem(item, "is_repeat"));
             relays[r_count].gpio = safe_get_int(cJSON_GetObjectItem(item, "gpio"), 0);
             r_count++;
         }
@@ -139,7 +176,7 @@ void storage_load_all() {
     // 3. LOAD USERS.JSON
     u_count = 0;
     if ((data = read_file("data/users.json"))) {
-    //  printf("%s\n", data);
+        printf("%s\n", data);
         root = cJSON_Parse(data);
         cJSON_ArrayForEach(item, root) {
             if (u_count >= MAX_USERS) break;
@@ -147,7 +184,9 @@ void storage_load_all() {
             safe_strncpy(users[u_count].pin, cJSON_GetObjectItem(item, "pin"), STR_SMALL);
             safe_strncpy(users[u_count].phone, cJSON_GetObjectItem(item, "phone"), STR_SMALL);
             safe_strncpy(users[u_count].email, cJSON_GetObjectItem(item, "email"), STR_MEDIUM);
-            safe_strncpy(users[u_count].notify, cJSON_GetObjectItem(item, "notify"), STR_SMALL);
+            users[u_count].notify = safe_get_int(cJSON_GetObjectItem(item, "notify"), 0);
+            users[u_count].is_admin = safe_get_bool(cJSON_GetObjectItem(item, "is_admin"));
+
             u_count++;
         }
         if(root) cJSON_Delete(root);
@@ -169,22 +208,22 @@ void storage_load_all() {
             safe_strncpy(zones[z_count].model, cJSON_GetObjectItem(item, "model"), STR_SMALL);
             safe_strncpy(zones[z_count].manufacturer, cJSON_GetObjectItem(item, "manufacturer"), STR_SMALL);
 
-            zones[z_count].ischime = safe_get_bool(cJSON_GetObjectItem(item, "isChime"));
-            zones[z_count].isalarmonarmedonly = safe_get_bool(cJSON_GetObjectItem(item, "isAlarmOnArmedOnly"));
+            zones[z_count].is_chime = safe_get_bool(cJSON_GetObjectItem(item, "is_chime"));
+            zones[z_count].is_alarm_on_armed_only = safe_get_bool(cJSON_GetObjectItem(item, "is_alarm_on_armed_only"));
             zones[z_count].gpio = safe_get_int(cJSON_GetObjectItem(item, "gpio"), 0);
             
-            zones[z_count].isi2c = safe_get_bool(cJSON_GetObjectItem(item, "isI2C")) || 
-                                   safe_get_bool(cJSON_GetObjectItem(item, "sI2C"));
-            zones[z_count].i2caddress = safe_get_int(cJSON_GetObjectItem(item, "I2CAddress"), 0);
+            zones[z_count].is_i2c = safe_get_bool(cJSON_GetObjectItem(item, "is_i2c")) || 
+                                   safe_get_bool(cJSON_GetObjectItem(item, "is_i2c"));
+            zones[z_count].i2c_address = safe_get_int(cJSON_GetObjectItem(item, "i2c_address"), 0);
 
-            zones[z_count].isperimeter = safe_get_bool(cJSON_GetObjectItem(item, "isPerimeter")) || 
-                                         safe_get_bool(cJSON_GetObjectItem(item, "IsPerimeter"));
-            zones[z_count].isinterior = safe_get_bool(cJSON_GetObjectItem(item, "isInterior")) || 
-                                        safe_get_bool(cJSON_GetObjectItem(item, "IsInterior"));
-            zones[z_count].ispanic = safe_get_bool(cJSON_GetObjectItem(item, "isPanic")) || 
-                                     safe_get_bool(cJSON_GetObjectItem(item, "IsPanic"));
+            zones[z_count].is_perimeter = safe_get_bool(cJSON_GetObjectItem(item, "is_perimeter")) || 
+                                         safe_get_bool(cJSON_GetObjectItem(item, "Is_perimeter"));
+            zones[z_count].is_interior = safe_get_bool(cJSON_GetObjectItem(item, "is_interior")) || 
+                                        safe_get_bool(cJSON_GetObjectItem(item, "is_interior"));
+            zones[z_count].is_panic = safe_get_bool(cJSON_GetObjectItem(item, "is_panic")) || 
+                                     safe_get_bool(cJSON_GetObjectItem(item, "is_panic"));
 
-            zones[z_count].alert_sent = false;
+            zones[z_count].is_alert_sent = false;
             z_count++;
         }
         if(root) cJSON_Delete(root);
@@ -194,21 +233,21 @@ void storage_load_all() {
 }
 void storage_debug_print() {
     printf("\n================= SYSTEM CONFIG DEBUG =================\n");
-    printf("Account ID:    [%s]\n", config.accountid);
+    printf("Account ID:    [%s]\n", config.account_id);
     printf("Owner Name:    [%s]\n", config.name);
     printf("Master PIN:    [%s]\n", config.pin);
-    printf("Address:       %s, %s, %s %s\n", config.address1, config.city, config.state, config.zipcode);
+    printf("Address:       %s, %s, %s %s\n", config.address1, config.city, config.state, config.zip_code);
     printf("Location:      Lat %.4f, Lon %.4f\n", config.latitude, config.longitude);
-    printf("Notify:        [%s]\n", config.notify);
+    printf("Notify:        [%d]\n", config.notify);
     printf("Delays:        Exit %ds | Entry %ds | Cancel %ds\n", 
-            config.exitdelay, config.entrydelay, config.canceldelay);
+            config.exit_delay, config.entry_delay, config.cancel_delay);
     
     printf("\n--- NOTIFICATIONS ---\n");
     printf("Telegram:      %s | ID: [%s]\n", 
-            config.istelegramenabled ? "ON" : "OFF", config.telegramid);
+            config.is_telegram_enabled ? "ON" : "OFF", config.telegram_id);
     printf("SMTP Server:   %s:%d | User: %s\n", 
-            config.smtpserver, config.smtpport, config.smtpuser);
-    printf("MQTT Server:   %s:%d\n", config.mqttserver, config.mqttport);
+            config.smtp_server, config.smtp_port, config.smtp_user);
+    printf("MQTT Server:   %s:%d\n", config.mqtt_server, config.mqtt_port);
  
     printf("\n--- AUTHORIZED USERS (%d LOADED) ---\n", u_count);
     if (u_count == 0) {
@@ -217,7 +256,7 @@ void storage_debug_print() {
         printf(" %-15s | %-6s | %-12s |%-17s | %s\n", "NAME", "PIN", "PHONE", " NOTIFY", "EMAIL"                 "NOTIFY");
         printf(" -----------------------------------------------------------------------------------------------\n");
         for(int i = 0; i < u_count; i++) {
-            printf(" %-15s | %-6s | %-12s | %-15s  |%s\n", 
+            printf(" %-15s | %-6s | %-12s | %-15d  |%s\n", 
                 users[i].name, 
                 users[i].pin, 
                 users[i].phone, 
@@ -233,17 +272,17 @@ void storage_debug_print() {
             zones[i].name, 
             zones[i].gpio, 
             zones[i].type,
-            zones[i].ischime ? "YES" : "NO",
-            zones[i].isperimeter ? "YES" : "NO",
-            zones[i].isi2c ? "YES" : "NO",
-            zones[i].i2caddress);
+            zones[i].is_chime ? "YES" : "NO",
+            zones[i].is_perimeter ? "YES" : "NO",
+            zones[i].is_i2c ? "YES" : "NO",
+            zones[i].i2c_address);
     }
 
     printf("\n--- RELAYS (%d LOADED) ---\n", r_count);
     for(int i = 0; i < r_count; i++) {
         printf("Relay %d: %-12s | GPIO: %-2d | Type: %-8s | Repeat: %s\n", 
             relays[i].id, relays[i].name, relays[i].gpio, relays[i].type, 
-            relays[i].isrepeat ? "YES" : "NO");
+            relays[i].is_repeat ? "YES" : "NO");
     }
     printf("=======================================================\n\n");
 }

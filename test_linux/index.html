@@ -1,66 +1,129 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sentinel Dashboard</title>
+    <title>Sentinel - Home</title>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
-        .item { border: 1px solid #ddd; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .item.active { background: #fff1f0; border-color: #ffa39e; }
-        .btn { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; }
-        .btn-arm { background: #1890ff; color: white; }
-        .btn-disarm { background: #ff4d4f; color: white; }
-        .btn-trip { background: #fafafa; border: 1px solid #d9d9d9; }
+        body { font-family: sans-serif; background: #1a1a1a; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .portal { background: #2a2a2a; padding: 30px; border-radius: 12px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #444; width: 340px; }
+        .status-badge { display: inline-block; padding: 8px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; margin: 15px 0; min-width: 180px; transition: 0.3s; }
+        
+        /* Dynamic Status Colors */
+        .ready { background: #28a745; color: white; }
+        .not-ready { background: #ffc107; color: black; }
+        .armed { background: #dc3545; color: white; }
+        .offline { background: #444; color: #888; }
+
+        .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+        .key { background: #333; padding: 18px; border-radius: 8px; font-size: 22px; cursor: pointer; border: 1px solid #444; }
+        .display { background: #000; padding: 15px; font-size: 24px; margin-bottom: 15px; border-radius: 5px; letter-spacing: 8px; color: #0f0; height: 30px; border: 1px solid #333; display: flex; align-items: center; justify-content: center; }
+        
+        #maint-menu { display: none; border-top: 1px solid #444; padding-top: 15px; }
+        .menu-btn { display: block; padding: 15px; margin: 10px 0; border-radius: 8px; font-weight: bold; width: 100%; border: none; cursor: pointer; }
+        .btn-arm { background: #007bff; color: white; }
+        .btn-arm:disabled { background: #444; color: #777; cursor: not-allowed; }
+        .btn-disarm { background: #28a745; color: white; }
     </style>
 </head>
 <body>
+    <div class="portal">
+        <h1>SENTINEL</h1>
+        <div id="quick-status" class="status-badge offline">CONNECTING...</div>
 
-<div class="card">
-    <h2>Status: <span id="sysState">--</span></h2>
-    <p>config: <strong id="config">--</strong></p>
-    <button class="btn btn-arm" onclick="cmd('arm')">ARM SYSTEM</button>
-    <button class="btn btn-disarm" onclick="cmd('disarm')">DISARM</button>
-</div>
+        <div id="auth-section">
+            <div class="display" id="pin-display"></div>
+            <div class="keypad">
+                <div class="key" onclick="press(1)">1</div><div class="key" onclick="press(2)">2</div><div class="key" onclick="press(3)">3</div>
+                <div class="key" onclick="press(4)">4</div><div class="key" onclick="press(5)">5</div><div class="key" onclick="press(6)">6</div>
+                <div class="key" onclick="press(7)">7</div><div class="key" onclick="press(8)">8</div><div class="key" onclick="press(9)">9</div>
+                <div class="key" style="color:#dc3545" onclick="clr()">C</div><div class="key" onclick="press(0)">0</div><div class="key" style="color:#28a745" onclick="submit()">OK</div>
+            </div>
+            <div style="font-size: 10px; color: #444; margin-top: 20px; cursor: pointer;" onclick="showMenu('Tester', true, 0, true)">[DEBUG] Bypass</div>
+        </div>
 
-<h3>Zones</h3>
-<div id="zGrid" class="grid"></div>
+        <div id="maint-menu">
+            <div style="color:#888; font-size: 13px; margin-bottom: 15px;">Welcome, <b id="user-name"></b></div>
+            
+            <div id="arm-ui">
+                <button id="arm-away-btn" class="menu-btn btn-arm" onclick="sendAction('/api/arm', {mode:'away'})">ARM AWAY</button>
+                <button id="arm-stay-btn" class="menu-btn btn-arm" onclick="sendAction('/api/arm', {mode:'stay'})">ARM STAY</button>
+            </div>
+            
+            <button id="disarm-ui" class="menu-btn btn-disarm" style="display:none;" onclick="sendAction('/api/disarm', {})">DISARM SYSTEM</button>
 
-<h3>Relays</h3>
-<div id="rGrid" class="grid"></div>
+            <hr style="border:0; border-top:1px solid #444; margin:15px 0;">
+            <div id="admin-links" style="display:none;">
+                <a href="status.html" class="menu-btn" style="background:#333; color:white; text-decoration:none;">📊 Zone Status</a>
+                <a href="users.html" class="menu-btn" style="background:#333; color:white; text-decoration:none;">👤 User Management</a>
+            </div>
+            <button onclick="location.reload()" style="background:none; border:none; color:#555; cursor:pointer; margin-top:10px;">Logout</button>
+        </div>
+    </div>
 
-<script>
-    function cmd(type) {
-        fetch(`/api/${type}`, { method: 'POST' }).then(() => update());
-    }
+    <script>
+        let currentPin = "";
+        let isArmed = false;
+        let isReady = false;
 
-    function trigger(id) {
-        fetch(`/api/trigger?id=${id}`, { method: 'POST' }).then(() => update());
-    }
+        function press(n) { if(currentPin.length < 4) { currentPin += n; document.getElementById('pin-display').innerText = "*".repeat(currentPin.length); } }
+        function clr() { currentPin = ""; document.getElementById('pin-display').innerText = ""; }
 
-    function update() {
-        fetch('/api/config').then(r => r.json()).then(data => {
-            document.getElementById('sysState').innerText = data.state;
-            document.getElementById('config').innerText = data.config;
+        async function submit() {
+            const res = await fetch('/api/auth', { method: 'POST', body: JSON.stringify({ pin: currentPin }) });
+            const data = await res.json();
+            if (data.authenticated) showMenu(data.name, data.is_admin, data.state, true);
+            else { alert("Access Denied"); clr(); }
+        }
 
-            document.getElementById('zGrid').innerHTML = data.zones.map(z => `
-                <div class="item ${z.violated ? 'active' : ''}">
-                    <div><strong>${z.name}</strong><br><small>${z.type}</small></div>
-                    <button class="btn btn-trip" onclick="trigger(${z.id})">TRIP</button>
-                </div>
-            `).join('');
+        function showMenu(name, isAdmin, state, ready) {
+            document.getElementById('auth-section').style.display = "none";
+            document.getElementById('maint-menu').style.display = "block";
+            document.getElementById('user-name').innerText = name;
+            if(isAdmin) document.getElementById('admin-links').style.display = "block";
+            updateUI(state, ready);
+        }
 
-            document.getElementById('rGrid').innerHTML = data.relays.map(r => `
-                <div class="item ${r.state ? 'active' : ''}">
-                    <div><strong>${r.name}</strong></div>
-                    <span>${r.state ? '● ON' : '○ OFF'}</span>
-                </div>
-            `).join('');
-        });
-    }
+        function updateUI(state, ready) {
+            isArmed = (state !== 0);
+            isReady = ready;
+            const badge = document.getElementById('quick-status');
+            
+            if(isArmed) {
+                badge.innerText = "SYSTEM ARMED";
+                badge.className = "status-badge armed";
+            } else {
+                badge.innerText = isReady ? "READY TO ARM" : "NOT READY";
+                badge.className = "status-badge " + (isReady ? "ready" : "not-ready");
+            }
 
-    setInterval(update, 2000);
-    update();
-</script>
+            if(document.getElementById('maint-menu').style.display === "block") {
+                document.getElementById('arm-ui').style.display = isArmed ? "none" : "block";
+                document.getElementById('disarm-ui').style.display = isArmed ? "block" : "none";
+                
+                // Disable Arming buttons if not ready
+                document.getElementById('arm-away-btn').disabled = !isReady;
+                document.getElementById('arm-stay-btn').disabled = !isReady;
+            }
+        }
+
+        async function sendAction(url, body) {
+            const res = await fetch(url, { method: 'POST', body: JSON.stringify(body) });
+            if (!res.ok) {
+                const err = await res.json();
+                alert("Error: " + err.msg);
+            }
+            checkState();
+        }
+
+        async function checkState() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                updateUI(data.state, data.is_ready);
+            } catch(e) { document.getElementById('quick-status').innerText = "OFFLINE"; }
+        }
+
+        setInterval(checkState, 3000);
+        checkState();
+    </script>
 </body>
 </html>

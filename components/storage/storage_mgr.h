@@ -2,6 +2,8 @@
 #define STORAGE_MGR_H
 
 #include <stdbool.h>
+#include "cJSON.h"
+#include "user_mgr.h"
 
 // String size definitions for memory safety
 #define STR_SMALL 64
@@ -12,20 +14,30 @@
 #define MAX_ZONES 32
 #define MAX_USERS 10
 #define MAX_RELAYS 10
+// Inside storage_mgr.h
+
+extern user_t users[MAX_USERS]; // Tells other files the array exists in storage_mgr.o
+extern int u_count;
+typedef enum {
+    NOTIFY_NONE     = 0,
+    NOTIFY_EMAIL    = 1,
+    NOTIFY_TELEGRAM = 2,
+    NOTIFY_SERVICE  = 3
+} notify_mode_t;
 
 /**
  * System Configuration Struct
  * Maps to config.json
  */
 typedef struct {
-    char accountid[STR_SMALL];
+    char account_id[STR_SMALL];
     char pin[STR_SMALL];
     char name[STR_MEDIUM];
     char address1[STR_MEDIUM];
     char address2[STR_MEDIUM];
     char city[STR_SMALL];
     char state[STR_SMALL];
-    char zipcode[STR_SMALL];
+    char zip_code[STR_SMALL];
     char email[STR_MEDIUM];
     char phone[STR_SMALL];
     char instructions[STR_LARGE];
@@ -35,41 +47,41 @@ typedef struct {
     int accuracy;
 
     // Monitoring Service (Noonlight)
-    char monitorserviceid[STR_MEDIUM];
-    char monitorservicekey[STR_MEDIUM];
-    char monitoringurl[STR_MEDIUM];
-    char notify[STR_SMALL];
+    char monitor_service_id[STR_MEDIUM];
+    char monitor_service_key[STR_MEDIUM];
+    char monitoring_url[STR_MEDIUM];
+    int notify;
     
-    bool monitorfire;
-    bool monitorpolice;
-    bool monitormedical;
-    bool monitorother;
+    bool is_monitor_fire;
+    bool is_monitor_police;
+    bool is_monitor_medical;
+    bool is_monitor_other;
 
     // Email (SMTP)
-    char smtpserver[STR_MEDIUM];
-    int smtpport;
-    char smtpuser[STR_MEDIUM];
-    char smtppass[STR_MEDIUM];
+    char smtp_server[STR_MEDIUM];
+    int smtp_port;
+    char smtp_user[STR_MEDIUM];
+    char smtp_pass[STR_MEDIUM];
 
     // MQTT
-    char mqttserver[STR_MEDIUM];
-    int mqttport;
-    char mqttuser[STR_SMALL];
-    char mqttpass[STR_SMALL];
+    char mqtt_server[STR_MEDIUM];
+    int mqtt_port;
+    char mqtt_user[STR_SMALL];
+    char mqtt_pass[STR_SMALL];
 
     // Telegram
-    char telegramid[STR_SMALL];
-    char telegramtoken[STR_MEDIUM];
-    bool istelegramenabled;
+    char telegram_id[STR_SMALL];
+    char telegram_token[STR_MEDIUM];
+    bool is_telegram_enabled;
 
     // External Integrations
-    char nvrserverURL[STR_MEDIUM];
-    char haintegrationURL[STR_MEDIUM];
+    char nvrserver_url[STR_MEDIUM];
+    char haintegration_url[STR_MEDIUM];
 
     // Timers
-    int entrydelay;
-    int exitdelay;
-    int canceldelay;
+    int entry_delay;
+    int exit_delay;
+    int cancel_delay;
 } config_t;
 
 /**
@@ -80,24 +92,12 @@ typedef struct {
     int id;
     char name[STR_MEDIUM];
     char description[STR_MEDIUM];
-    int durationSec;
+    int duration;
     char location[STR_MEDIUM];
     char type[STR_SMALL];
-    bool isrepeat;
+    bool is_repeat;
     int gpio;
 } relay_t;
-
-/**
- * User Configuration Struct
- * Maps to users.json
- */
-typedef struct {
-    char name[STR_SMALL];
-    char pin[STR_SMALL];
-    char phone[STR_SMALL];
-    char email[STR_MEDIUM];
-    char notify[STR_SMALL];
-} user_t;
 
 /**
  * Zone Configuration Struct
@@ -112,27 +112,27 @@ typedef struct {
     char model[STR_SMALL];
     char manufacturer[STR_SMALL];
     
-    bool ischime;
-    bool isalarmonarmedonly;
+    bool is_chime;
+    bool is_alarm_on_armed_only;
     int gpio;
     
     // I2C Hardware Support
-    bool isi2c;
-    int i2caddress;
+    bool is_i2c;
+    int i2c_address;
     
     // Logic Flags
-    bool isperimeter;
-    bool isinterior;
-    bool ispanic;
+    bool is_perimeter;
+    bool is_interior;
+    bool is_panic;
     
     // Runtime state (Not in JSON)
-    bool alert_sent; 
+    bool is_alert_sent; 
 } zone_t;
 
 // --- Global Data Stores ---
 extern config_t config;
 extern relay_t relays[MAX_RELAYS];
-extern user_t users[MAX_USERS];
+//extern user_t users[MAX_USERS];
 extern zone_t zones[MAX_ZONES];
 
 extern int z_count;
@@ -142,5 +142,5 @@ extern int u_count;
 // --- Functions ---
 void storage_load_all();
 void storage_debug_print();
-
+void storage_save_users(void);
 #endif

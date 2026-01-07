@@ -37,10 +37,10 @@ void storage_load_owner(config_t *obj) {
         if ((item = cJSON_GetObjectItem(root, "Notify"))) strncpy(obj->notify, item->valuestring, STR_SMALL - 1);
         if ((item = cJSON_GetObjectItem(root, "name"))) strncpy(obj->name, item->valuestring, STR_MEDIUM - 1);
         if ((item = cJSON_GetObjectItem(root, "Email"))) strncpy(obj->email, item->valuestring, STR_MEDIUM - 1);
-        if ((item = cJSON_GetObjectItem(root, "SMTPServer"))) strncpy(obj->smtp_server, item->valuestring, STR_MEDIUM - 1);
-        if ((item = cJSON_GetObjectItem(root, "SMTPPort"))) obj->smtp_port = item->valueint;
-        if ((item = cJSON_GetObjectItem(root, "SMTPUser"))) strncpy(obj->smtp_user, item->valuestring, STR_MEDIUM - 1);
-        if ((item = cJSON_GetObjectItem(root, "SMTPPass"))) strncpy(obj->smtp_pass, item->valuestring, STR_MEDIUM - 1);
+        if ((item = cJSON_GetObjectItem(root, "amtp_server"))) strncpy(obj->smtp_server, item->valuestring, STR_MEDIUM - 1);
+        if ((item = cJSON_GetObjectItem(root, "smtp_port"))) obj->smtp_port = item->valueint;
+        if ((item = cJSON_GetObjectItem(root, "smtp_user"))) strncpy(obj->smtp_user, item->valuestring, STR_MEDIUM - 1);
+        if ((item = cJSON_GetObjectItem(root, "smtp_ass"))) strncpy(obj->smtp_pass, item->valuestring, STR_MEDIUM - 1);
         cJSON_Delete(root);
     }
     free(data);

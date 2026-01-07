@@ -28,14 +28,14 @@ static void smtp_execute_send(config_t *config, const char *target_email, const 
     char url[256];
     
     // Construct SMTPS URL (e.g., smtps://smtp.gmail.com:465)
-    snprintf(url, sizeof(url), "smtps://%s:%d", config->smtpserver, config->smtpport);
+    snprintf(url, sizeof(url), "smtps://%s:%d", config->smtp_server, config->smtp_port);
 
     // Set server and authentication details
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_USERNAME, config->smtpuser);
-    curl_easy_setopt(curl, CURLOPT_PASSWORD, config->smtppass);
+    curl_easy_setopt(curl, CURLOPT_USERNAME, config->smtp_user);
+    curl_easy_setopt(curl, CURLOPT_PASSWORD, config->smtp_pass);
     curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-    curl_easy_setopt(curl, CURLOPT_MAIL_FROM, config->smtpuser);
+    curl_easy_setopt(curl, CURLOPT_MAIL_FROM, config->smtp_user);
 
     // Add recipient to the envelope
     recipients = curl_slist_append(recipients, target_email);
@@ -45,7 +45,7 @@ static void smtp_execute_send(config_t *config, const char *target_email, const 
     char payload[2048];
     snprintf(payload, sizeof(payload),
              "To: %s\r\nFrom: %s\r\nSubject: %s\r\n\r\n%s",
-             target_email, config->smtpuser, subject, body);
+             target_email, config->smtp_user, subject, body);
 
     // Provide payload to curl via a memory stream (fmemopen)
     FILE *temp = fmemopen((void*)payload, strlen(payload), "r");
