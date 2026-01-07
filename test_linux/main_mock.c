@@ -7,14 +7,13 @@
 #include "storage_mgr.h"
 
 // --- PROTOTYPES ---
-void monitor_init(void); // Silences the implicit declaration warning
+void monitor_init(void);
 
 // --- GLOBAL VARIABLES ---
 static struct mg_mgr mgr;
 int mock_gpio_pins[100] = { [0 ... 99] = 1 }; 
 
 // --- HELPER FUNCTIONS ---
-
 int digitalRead(int pin) {
     if (pin < 0 || pin >= 100) return 1;
     return mock_gpio_pins[pin];
@@ -29,13 +28,11 @@ void get_json_str(struct mg_str json, const char *path, char *dst, int dst_len) 
 }
 
 // --- MOCK HAL WRAPPERS ---
-// Matches your -Wl,--wrap flags in the compiler command
-
 void __wrap_hal_set_relay(int relay_id, bool active) { }
 bool __wrap_hal_get_relay_state(int relay_id) { return false; }
 void __wrap_hal_set_siren(bool active) { }
 void __wrap_hal_set_strobe(bool active) { }
-int __wrap_hal_get_zone_state(int zone_id) { return 1; } // Default normal
+int __wrap_hal_get_zone_state(int zone_id) { return 1; }
 
 // --- WEB HANDLER ---
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
@@ -57,12 +54,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             user_add(users, &u_count, name, pin, "", email, atoi(n_buf), false); 
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
-        else if (mg_strcmp(hm->uri, mg_str("/api/users/delete")) == 0) {
-            char name[STR_SMALL] = {0};
-            get_json_str(hm->body, "$.name", name, sizeof(name));
-            user_drop(users, &u_count, name);
-            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
-        }
 
         // 2. AUTH & CONTROL
         else if (mg_strcmp(hm->uri, mg_str("/api/auth")) == 0) {
@@ -74,59 +65,70 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 res.authenticated ? "true" : "false", res.is_admin ? "true" : "false",
                 res.name, engine_get_arm_state());
         }
-        else if (mg_strcmp(hm->uri, mg_str("/api/arm")) == 0) {
-            bool can_arm = true;
-            for (int i = 0; i < z_count; i++) {
-                if (zones[i].is_perimeter && digitalRead(zones[i].gpio) == 0) {
-                    can_arm = false;
-                    break;
-                }
-            }
-            if (!can_arm) {
-                mg_http_reply(c, 400, "Content-Type: application/json\r\n", "{\"success\":false,\"msg\":\"Perimeter Open\"}");
-            } else {
-                char m_str[20] = {0};
-                get_json_str(hm->body, "$.mode", m_str, sizeof(m_str));
-                arm_mode_t mode = (strcmp(m_str, "stay") == 0) ? ARM_STAY : (strcmp(m_str, "night") == 0) ? ARM_NIGHT : ARM_AWAY;
-                engine_ui_arm(mode);
-                mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"success\":true}");
-            }
-        }
-        else if (mg_strcmp(hm->uri, mg_str("/api/disarm")) == 0) {
-            engine_ui_disarm();
-            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"success\":true}");
-        }
 
-        // 3. STATUS
+        // 3. FULL AUDIT STATUS (EVERY STRUCT FIELD)
         else if (mg_strcmp(hm->uri, mg_str("/api/status")) == 0) {
             bool is_ready = true;
-            static char s_buf[10240];
+            static char s_buf[45056]; // 44KB buffer to handle full config + strings
+            memset(s_buf, 0, sizeof(s_buf));
+
             for (int i = 0; i < z_count; i++) {
                 if (zones[i].is_perimeter && digitalRead(zones[i].gpio) == 0) { is_ready = false; break; }
             }
-            int s_len = snprintf(s_buf, sizeof(s_buf), 
-                               "{\"state\":%d,\"is_ready\":%s,\"siteName\":\"%s\",\"zones\":[", 
-                               engine_get_arm_state(), is_ready ? "true" : "false", config.name);
+
+            // --- Part A: GLOBAL CONFIG ---
+            int off = snprintf(s_buf, sizeof(s_buf), 
+                "{\"config\":{"
+                "\"acct_id\":\"%s\",\"pin\":\"%s\",\"name\":\"%s\",\"addr1\":\"%s\",\"addr2\":\"%s\","
+                "\"city\":\"%s\",\"state\":\"%s\",\"zip\":\"%s\",\"email\":\"%s\",\"phone\":\"%s\","
+                "\"instr\":\"%s\",\"lat\":%f,\"lon\":%f,\"acc\":%d,"
+                "\"mon_id\":\"%s\",\"mon_key\":\"%s\",\"mon_url\":\"%s\",\"notify\":%d,"
+                "\"fire\":%s,\"police\":%s,\"med\":%s,\"oth\":%s,"
+                "\"smtp_srv\":\"%s\",\"smtp_port\":%d,\"smtp_user\":\"%s\",\"smtp_pass\":\"%s\","
+                "\"mqtt_srv\":\"%s\",\"mqtt_port\":%d,\"mqtt_user\":\"%s\",\"mqtt_pass\":\"%s\","
+                "\"tg_id\":\"%s\",\"tg_tok\":\"%s\",\"tg_en\":%s,\"nvr_url\":\"%s\",\"ha_url\":\"%s\","
+                "\"ent_d\":%d,\"ext_d\":%d,\"can_d\":%d,\"sys_state\":%d,\"ready\":%s},",
+                config.account_id, config.pin, config.name, config.address1, config.address2,
+                config.city, config.state, config.zip_code, config.email, config.phone,
+                config.instructions, config.latitude, config.longitude, config.accuracy,
+                config.monitor_service_id, config.monitor_service_key, config.monitoring_url, config.notify,
+                config.is_monitor_fire ? "true" : "false", config.is_monitor_police ? "true" : "false",
+                config.is_monitor_medical ? "true" : "false", config.is_monitor_other ? "true" : "false",
+                config.smtp_server, config.smtp_port, config.smtp_user, config.smtp_pass,
+                config.mqtt_server, config.mqtt_port, config.mqtt_user, config.mqtt_pass,
+                config.telegram_id, config.telegram_token, config.is_telegram_enabled ? "true" : "false",
+                config.nvrserver_url, config.haintegration_url,
+                config.entry_delay, config.exit_delay, config.cancel_delay,
+                engine_get_arm_state(), is_ready ? "true" : "false");
+
+            // --- Part B: ZONES ARRAY ---
+            off += snprintf(s_buf + off, sizeof(s_buf) - off, "\"zones\":[");
             for (int i = 0; i < z_count; i++) {
-                s_len += snprintf(s_buf + s_len, sizeof(s_buf) - s_len, 
-                    "{\"id\":%d,\"name\":\"%s\",\"type\":\"%s\",\"violated\":%s,\"peri\":%s}%s", 
-                    i + 1, zones[i].name, zones[i].type, 
-                    (digitalRead(zones[i].gpio) == 0) ? "true" : "false",
-                    zones[i].is_perimeter ? "true" : "false",
+                off += snprintf(s_buf + off, sizeof(s_buf) - off, 
+                    "{\"id\":%d,\"name\":\"%s\",\"desc\":\"%s\",\"type\":\"%s\",\"loc\":\"%s\","
+                    "\"mod\":\"%s\",\"mfr\":\"%s\",\"chime\":%s,\"arm_only\":%s,\"gpio\":%d,"
+                    "\"i2c\":%s,\"i2c_addr\":%d,\"peri\":%s,\"interior\":%s,\"panic\":%s,\"violated\":%s}%s", 
+                    zones[i].id, zones[i].name, zones[i].description, zones[i].type, zones[i].location,
+                    zones[i].model, zones[i].manufacturer, zones[i].is_chime ? "true" : "false",
+                    zones[i].is_alarm_on_armed_only ? "true" : "false", zones[i].gpio,
+                    zones[i].is_i2c ? "true" : "false", zones[i].i2c_address,
+                    zones[i].is_perimeter ? "true" : "false", zones[i].is_interior ? "true" : "false",
+                    zones[i].is_panic ? "true" : "false", (digitalRead(zones[i].gpio) == 0) ? "true" : "false",
                     (i < z_count - 1) ? "," : "");
             }
-            s_len += snprintf(s_buf + s_len, sizeof(s_buf) - s_len, "],\"relays\":[]}");
-            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", s_buf);
-        }
-        else if (mg_strcmp(hm->uri, mg_str("/api/trigger")) == 0) {
-            char id_str[10] = {0};
-            mg_http_get_var(&hm->query, "id", id_str, sizeof(id_str));
-            int id = atoi(id_str);
-            if (id > 0 && id <= z_count) {
-                int gpio = zones[id-1].gpio;
-                mock_gpio_pins[gpio] = !mock_gpio_pins[gpio];
+
+            // --- Part C: RELAYS ARRAY ---
+            off += snprintf(s_buf + off, sizeof(s_buf) - off, "],\"relays\":[");
+            for (int i = 0; i < r_count; i++) {
+                off += snprintf(s_buf + off, sizeof(s_buf) - off, 
+                    "{\"id\":%d,\"name\":\"%s\",\"desc\":\"%s\",\"dur\":%d,\"loc\":\"%s\","
+                    "\"type\":\"%s\",\"repeat\":%s,\"gpio\":%d}%s", 
+                    relays[i].id, relays[i].name, relays[i].description, relays[i].duration,
+                    relays[i].location, relays[i].type, relays[i].is_repeat ? "true" : "false",
+                    relays[i].gpio, (i < r_count - 1) ? "," : "");
             }
-            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"success\":true}");
+            strcat(s_buf, "]}");
+            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", s_buf);
         }
         else {
             struct mg_http_serve_opts opts = {.root_dir = "."}; 
@@ -136,14 +138,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 int main(void) {
-    mg_log_set(MG_LL_NONE); 
     storage_load_all(); 
     engine_init();
     monitor_init();
-    
     mg_mgr_init(&mgr);
     mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
-
     while (1) {
         mg_mgr_poll(&mgr, 10);
         engine_tick();

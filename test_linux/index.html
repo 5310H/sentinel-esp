@@ -1,27 +1,81 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Sentinel - Home</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sentinel Mobile</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .portal { background: #2a2a2a; padding: 30px; border-radius: 12px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #444; width: 340px; }
-        .status-badge { display: inline-block; padding: 8px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; margin: 15px 0; min-width: 180px; transition: 0.3s; }
+        :root {
+            --bg: #1a1a1a;
+            --panel: #2a2a2a;
+            --ready: #28a745;
+            --not-ready: #ffc107;
+            --armed: #dc3545;
+            --accent: #007bff;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: var(--bg); color: white; margin: 0; 
+            display: flex; justify-content: center; align-items: flex-start; 
+            min-height: 100vh; padding: 20px; box-sizing: border-box;
+        }
+
+        .portal { 
+            background: var(--panel); padding: 25px; border-radius: 16px; 
+            text-align: center; width: 100%; max-width: 400px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #444; 
+        }
+
+        h1 { margin: 0 0 5px 0; letter-spacing: 2px; font-size: 28px; }
+
+        .status-badge { 
+            display: block; padding: 12px; border-radius: 12px; 
+            font-size: 14px; font-weight: bold; margin: 15px 0; 
+            transition: 0.3s; text-transform: uppercase;
+        }
         
-        /* Dynamic Status Colors */
-        .ready { background: #28a745; color: white; }
-        .not-ready { background: #ffc107; color: black; }
-        .armed { background: #dc3545; color: white; }
+        .ready { background: var(--ready); color: white; }
+        .not-ready { background: var(--not-ready); color: black; }
+        .armed { background: var(--armed); color: white; }
         .offline { background: #444; color: #888; }
 
-        .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
-        .key { background: #333; padding: 18px; border-radius: 8px; font-size: 22px; cursor: pointer; border: 1px solid #444; }
-        .display { background: #000; padding: 15px; font-size: 24px; margin-bottom: 15px; border-radius: 5px; letter-spacing: 8px; color: #0f0; height: 30px; border: 1px solid #333; display: flex; align-items: center; justify-content: center; }
+        .display { 
+            background: #000; padding: 20px; font-size: 32px; 
+            margin-bottom: 20px; border-radius: 8px; color: #0f0; 
+            height: 40px; border: 1px solid #333; display: flex; 
+            align-items: center; justify-content: center; letter-spacing: 8px;
+        }
+
+        /* Large Touch Keypad */
+        .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .key { 
+            background: #333; padding: 25px 0; border-radius: 12px; 
+            font-size: 24px; cursor: pointer; border: 1px solid #444; 
+            -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+        }
+        .key:active { background: var(--accent); }
+
+        #maint-menu { display: none; padding-top: 10px; }
         
-        #maint-menu { display: none; border-top: 1px solid #444; padding-top: 15px; }
-        .menu-btn { display: block; padding: 15px; margin: 10px 0; border-radius: 8px; font-weight: bold; width: 100%; border: none; cursor: pointer; }
-        .btn-arm { background: #007bff; color: white; }
-        .btn-arm:disabled { background: #444; color: #777; cursor: not-allowed; }
-        .btn-disarm { background: #28a745; color: white; }
+        /* Full-width mobile buttons */
+        .menu-btn { 
+            display: block; padding: 20px; margin: 12px 0; 
+            border-radius: 12px; font-weight: bold; width: 100%; 
+            border: none; cursor: pointer; font-size: 18px; 
+            color: white; text-decoration: none; box-sizing: border-box;
+        }
+        .btn-arm { background: var(--accent); }
+        .btn-arm:disabled { background: #333; color: #666; cursor: not-allowed; opacity: 0.6; }
+        .btn-disarm { background: var(--ready); }
+        .btn-nav { background: #444; font-size: 16px; }
+
+        hr { border: 0; border-top: 1px solid #444; margin: 20px 0; }
+
+        /* Media Query for very small screens */
+        @media (max-width: 360px) {
+            .key { padding: 18px 0; font-size: 20px; }
+            .display { font-size: 24px; }
+        }
     </style>
 </head>
 <body>
@@ -35,95 +89,108 @@
                 <div class="key" onclick="press(1)">1</div><div class="key" onclick="press(2)">2</div><div class="key" onclick="press(3)">3</div>
                 <div class="key" onclick="press(4)">4</div><div class="key" onclick="press(5)">5</div><div class="key" onclick="press(6)">6</div>
                 <div class="key" onclick="press(7)">7</div><div class="key" onclick="press(8)">8</div><div class="key" onclick="press(9)">9</div>
-                <div class="key" style="color:#dc3545" onclick="clr()">C</div><div class="key" onclick="press(0)">0</div><div class="key" style="color:#28a745" onclick="submit()">OK</div>
+                <div class="key" style="color:var(--armed)" onclick="clr()">C</div><div class="key" onclick="press(0)">0</div><div class="key" style="color:var(--ready)" onclick="submit()">OK</div>
             </div>
-            <div style="font-size: 10px; color: #444; margin-top: 20px; cursor: pointer;" onclick="showMenu('Tester', true, 0, true)">[DEBUG] Bypass</div>
         </div>
 
         <div id="maint-menu">
-            <div style="color:#888; font-size: 13px; margin-bottom: 15px;">Welcome, <b id="user-name"></b></div>
+            <div id="user-info" style="font-size: 14px; color: #aaa; margin-bottom: 15px;"></div>
             
-            <div id="arm-ui">
-                <button id="arm-away-btn" class="menu-btn btn-arm" onclick="sendAction('/api/arm', {mode:'away'})">ARM AWAY</button>
-                <button id="arm-stay-btn" class="menu-btn btn-arm" onclick="sendAction('/api/arm', {mode:'stay'})">ARM STAY</button>
+            <div id="arm-group">
+                <button id="arm-away-btn" class="menu-btn btn-arm" onclick="doAction('/api/arm', {mode:'away'})">ARM AWAY</button>
+                <button id="arm-stay-btn" class="menu-btn btn-arm" onclick="doAction('/api/arm', {mode:'stay'})">ARM STAY</button>
             </div>
             
-            <button id="disarm-ui" class="menu-btn btn-disarm" style="display:none;" onclick="sendAction('/api/disarm', {})">DISARM SYSTEM</button>
+            <button id="btn-disarm" class="menu-btn btn-disarm" style="display:none;" onclick="doAction('/api/disarm', {})">DISARM SYSTEM</button>
 
-            <hr style="border:0; border-top:1px solid #444; margin:15px 0;">
+            <hr>
             <div id="admin-links" style="display:none;">
-                <a href="status.html" class="menu-btn" style="background:#333; color:white; text-decoration:none;">📊 Zone Status</a>
-                <a href="users.html" class="menu-btn" style="background:#333; color:white; text-decoration:none;">👤 User Management</a>
+                <a href="status.html" class="menu-btn btn-nav">📊 Zone Status</a>
+                <a href="users.html" class="menu-btn btn-nav">👤 User Management</a>
             </div>
-            <button onclick="location.reload()" style="background:none; border:none; color:#555; cursor:pointer; margin-top:10px;">Logout</button>
+            <button onclick="location.reload()" style="background:none; border:none; color:#777; cursor:pointer; font-size:14px; padding:10px;">Logout / Lock</button>
         </div>
     </div>
 
     <script>
-        let currentPin = "";
-        let isArmed = false;
-        let isReady = false;
+        let pin = "";
+        
+        // Touch-friendly press
+        function press(n) { 
+            if(pin.length < 4) { 
+                pin += n; 
+                document.getElementById('pin-display').innerText = "•".repeat(pin.length); 
+            } 
+        }
 
-        function press(n) { if(currentPin.length < 4) { currentPin += n; document.getElementById('pin-display').innerText = "*".repeat(currentPin.length); } }
-        function clr() { currentPin = ""; document.getElementById('pin-display').innerText = ""; }
+        function clr() { pin = ""; document.getElementById('pin-display').innerText = ""; }
 
         async function submit() {
-            const res = await fetch('/api/auth', { method: 'POST', body: JSON.stringify({ pin: currentPin }) });
+            const res = await fetch('/api/auth', { 
+                method: 'POST', 
+                body: JSON.stringify({pin}),
+                headers: {'Content-Type': 'application/json'} 
+            });
             const data = await res.json();
-            if (data.authenticated) showMenu(data.name, data.is_admin, data.state, true);
-            else { alert("Access Denied"); clr(); }
+            if(data.authenticated) {
+                document.getElementById('auth-section').style.display = "none";
+                document.getElementById('maint-menu').style.display = "block";
+                document.getElementById('user-info').innerText = "User: " + data.name;
+                if(data.is_admin) document.getElementById('admin-links').style.display = "block";
+                updateUI(data.state, true); 
+            } else {
+                clr();
+                document.getElementById('pin-display').innerText = "ERROR";
+                setTimeout(clr, 1000);
+            }
         }
 
-        function showMenu(name, isAdmin, state, ready) {
-            document.getElementById('auth-section').style.display = "none";
-            document.getElementById('maint-menu').style.display = "block";
-            document.getElementById('user-name').innerText = name;
-            if(isAdmin) document.getElementById('admin-links').style.display = "block";
-            updateUI(state, ready);
-        }
-
-        function updateUI(state, ready) {
-            isArmed = (state !== 0);
-            isReady = ready;
+        function updateUI(state, isReady) {
             const badge = document.getElementById('quick-status');
+            const armed = (state !== 0);
             
-            if(isArmed) {
+            if(armed) {
                 badge.innerText = "SYSTEM ARMED";
                 badge.className = "status-badge armed";
             } else {
-                badge.innerText = isReady ? "READY TO ARM" : "NOT READY";
+                badge.innerText = isReady ? "READY TO ARM" : "NOT READY (CHECK ZONES)";
                 badge.className = "status-badge " + (isReady ? "ready" : "not-ready");
             }
 
             if(document.getElementById('maint-menu').style.display === "block") {
-                document.getElementById('arm-ui').style.display = isArmed ? "none" : "block";
-                document.getElementById('disarm-ui').style.display = isArmed ? "block" : "none";
-                
-                // Disable Arming buttons if not ready
+                document.getElementById('arm-group').style.display = armed ? "none" : "block";
+                document.getElementById('btn-disarm').style.display = armed ? "block" : "none";
                 document.getElementById('arm-away-btn').disabled = !isReady;
                 document.getElementById('arm-stay-btn').disabled = !isReady;
             }
         }
 
-        async function sendAction(url, body) {
-            const res = await fetch(url, { method: 'POST', body: JSON.stringify(body) });
-            if (!res.ok) {
-                const err = await res.json();
-                alert("Error: " + err.msg);
+        async function doAction(url, body) {
+            const res = await fetch(url, { 
+                method: 'POST', 
+                body: JSON.stringify(body),
+                headers: {'Content-Type': 'application/json'}
+            });
+            if(!res.ok) {
+                const data = await res.json();
+                alert(data.msg || "Action Failed");
             }
-            checkState();
+            check();
         }
 
-        async function checkState() {
+        async function check() {
             try {
-                const res = await fetch('/api/status');
+                const res = await fetch('/api/status?t=' + Date.now());
                 const data = await res.json();
                 updateUI(data.state, data.is_ready);
-            } catch(e) { document.getElementById('quick-status').innerText = "OFFLINE"; }
+            } catch(e) { 
+                document.getElementById('quick-status').innerText = "OFFLINE"; 
+                document.getElementById('quick-status').className = "status-badge offline";
+            }
         }
 
-        setInterval(checkState, 3000);
-        checkState();
+        setInterval(check, 3000);
+        check();
     </script>
 </body>
 </html>

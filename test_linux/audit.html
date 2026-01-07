@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Memory Audit</title>
+    <style>
+        body { font-family: 'Courier New', monospace; background: #000; color: #0f0; padding: 20px; font-size: 12px; }
+        .section { border: 1px solid #222; margin-bottom: 25px; background: #050505; }
+        .title { background: #0f0; color: #000; padding: 8px; font-weight: bold; font-size: 14px; text-transform: uppercase; }
+        .row { display: grid; grid-template-columns: 200px 1fr; border-bottom: 1px solid #111; padding: 6px 10px; }
+        .row:hover { background: #111; }
+        .key { color: #888; text-transform: uppercase; font-size: 10px; }
+        .val { color: #0f0; word-break: break-all; }
+        .sub-header { background: #111; color: #fff; padding: 4px 10px; font-weight: bold; border-bottom: 1px solid #333; }
+        .pill { padding: 2px 5px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+        .pill-true { background: #f00; color: #fff; }
+        .pill-false { background: #222; color: #0f0; border: 1px solid #0f0; }
+        .btn { background: #0f0; color: #000; border: none; padding: 12px; cursor: pointer; font-family: inherit; font-weight: bold; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <button class="btn" onclick="runAudit()">DOWNLOAD LIVE MEMORY DUMP</button>
+
+    <div id="audit-results"></div>
+
+    <script>
+        function renderFields(obj) {
+            let html = '';
+            for (let [key, val] of Object.entries(obj)) {
+                let display = val;
+                if (typeof val === 'boolean') {
+                    display = `<span class="pill ${val ? 'pill-true' : 'pill-false'}">${val.toString().toUpperCase()}</span>`;
+                }
+                html += `<div class="row"><div class="key">${key}</div><div class="val">${display}</div></div>`;
+            }
+            return html;
+        }
+
+        async function runAudit() {
+            try {
+                const res = await fetch('/api/status?t=' + Date.now());
+                const data = await res.json();
+                const container = document.getElementById('audit-results');
+                container.innerHTML = '';
+
+                // 1. Audit Config Struct
+                let html = `<div class="section"><div class="title">[ STORAGE_MGR_CONFIG_T ]</div>`;
+                html += renderFields(data.config);
+                html += `</div>`;
+
+                // 2. Audit Zones Array
+                html += `<div class="section"><div class="title">[ ZONE_T_ARRAY (Size: ${data.zones.length}) ]</div>`;
+                data.zones.forEach((z, i) => {
+                    html += `<div class="sub-header">INDEX: ${i}</div>`;
+                    html += renderFields(z);
+                });
+                html += `</div>`;
+
+                // 3. Audit Relays Array
+                html += `<div class="section"><div class="title">[ RELAY_T_ARRAY (Size: ${data.relays.length}) ]</div>`;
+                data.relays.forEach((r, i) => {
+                    html += `<div class="sub-header">INDEX: ${i}</div>`;
+                    html += renderFields(r);
+                });
+                html += `</div>`;
+
+                container.innerHTML = html;
+            } catch (e) {
+                alert("Audit Failed: Server connection lost.");
+            }
+        }
+        runAudit();
+    </script>
+</body>
+</html>
