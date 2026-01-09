@@ -12,6 +12,8 @@ void monitor_init(void);
 // --- GLOBAL VARIABLES ---
 static struct mg_mgr mgr;
 int mock_gpio_pins[100] = { [0 ... 99] = 1 }; 
+// Track relay states for the Part C status loop
+bool mock_relay_states[MAX_RELAYS] = { false }; 
 
 // --- HELPER FUNCTIONS ---
 int digitalRead(int pin) {
@@ -27,19 +29,23 @@ void get_json_str(struct mg_str json, const char *path, char *dst, int dst_len) 
     }
 }
 
-// --- MOCK HAL WRAPPERS ---
-void __wrap_hal_set_relay(int relay_id, bool active) { }
-bool __wrap_hal_get_relay_state(int relay_id) { return false; }
-void __wrap_hal_set_siren(bool active) { }
-void __wrap_hal_set_strobe(bool active) { }
-int __wrap_hal_get_zone_state(int zone_id) { return 1; }
+// --- MOCK HAL WRAPPERS (NOW CONNECTED) ---
+void __wrap_hal_set_relay(int relay_id, bool active) { 
+    if (relay_id >= 0 && relay_id < MAX_RELAYS) mock_relay_states[relay_id] = active;
+    printf("[HAL] Relay %d -> %s\n", relay_id, active ? "ON" : "OFF");
+}
+bool __wrap_hal_get_relay_state(int relay_id) { 
+    return (relay_id >= 0 && relay_id < MAX_RELAYS) ? mock_relay_states[relay_id] : false; 
+}
+void __wrap_hal_set_siren(bool active) { printf("[HAL] SIREN -> %s\n", active ? "ON" : "OFF"); }
+void __wrap_hal_set_strobe(bool active) { printf("[HAL] STROBE -> %s\n", active ? "ON" : "OFF"); }
+int __wrap_hal_get_zone_state(int zone_id) { return digitalRead(zone_id); }
 
 // --- WEB HANDLER ---
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message *hm = (struct mg_http_message *) ev_data;
         
-        // 1. USER MGMT
         if (mg_strcmp(hm->uri, mg_str("/api/users")) == 0) {
             char *json = users_to_json(); 
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", json);
@@ -54,8 +60,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             user_add(users, &u_count, name, pin, "", email, atoi(n_buf), false); 
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
-
-        // 2. AUTH & CONTROL
         else if (mg_strcmp(hm->uri, mg_str("/api/auth")) == 0) {
             char pin_in[STR_SMALL] = {0};
             get_json_str(hm->body, "$.pin", pin_in, sizeof(pin_in));
@@ -65,11 +69,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 res.authenticated ? "true" : "false", res.is_admin ? "true" : "false",
                 res.name, engine_get_arm_state());
         }
-
-        // 3. FULL AUDIT STATUS (EVERY STRUCT FIELD)
         else if (mg_strcmp(hm->uri, mg_str("/api/status")) == 0) {
             bool is_ready = true;
-            static char s_buf[45056]; // 44KB buffer to handle full config + strings
+            static char s_buf[45056]; 
             memset(s_buf, 0, sizeof(s_buf));
 
             for (int i = 0; i < z_count; i++) {
@@ -122,13 +124,41 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             for (int i = 0; i < r_count; i++) {
                 off += snprintf(s_buf + off, sizeof(s_buf) - off, 
                     "{\"id\":%d,\"name\":\"%s\",\"desc\":\"%s\",\"dur\":%d,\"loc\":\"%s\","
-                    "\"type\":\"%s\",\"repeat\":%s,\"gpio\":%d}%s", 
+                    "\"type\":\"%s\",\"repeat\":%s,\"gpio\":%d,\"active\":%s}%s", 
                     relays[i].id, relays[i].name, relays[i].description, relays[i].duration,
                     relays[i].location, relays[i].type, relays[i].is_repeat ? "true" : "false",
-                    relays[i].gpio, (i < r_count - 1) ? "," : "");
+                    relays[i].gpio, mock_relay_states[relays[i].id] ? "true" : "false", 
+                    (i < r_count - 1) ? "," : "");
             }
             strcat(s_buf, "]}");
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", s_buf);
+        }
+// --- NEW: ARM/DISARM HANDLERS ---
+        else if (mg_strcmp(hm->uri, mg_str("/api/arm")) == 0) {
+            // mode 1 is usually ARM_AWAY, mode 2 is ARM_STAY
+            engine_ui_arm(1); 
+            printf("[API] Arming Command Received\n");
+            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
+        }
+        else if (mg_strcmp(hm->uri, mg_str("/api/disarm")) == 0) {
+            engine_ui_disarm();
+            // Clear mock relays on disarm
+            for(int i=0; i<MAX_RELAYS; i++) mock_relay_states[i] = false;
+            printf("[API] Disarm Command Received\n");
+            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
+        }
+
+        // --- NEW: MOCK SENSOR TRIGGER ---
+        else if (mg_strcmp(hm->uri, mg_str("/api/trigger")) == 0) {
+            char id_buf[10] = {0};
+            mg_http_get_var(&hm->query, "id", id_buf, sizeof(id_buf));
+            int id = atoi(id_buf);
+            if (id >= 0 && id < 100) {
+                // Toggle the pin: if 1 (Secure), set to 0 (Violated)
+                mock_gpio_pins[id] = (mock_gpio_pins[id] == 1) ? 0 : 1;
+                printf("[MOCK] Zone %d is now %s\n", id, mock_gpio_pins[id] == 0 ? "VIOLATED" : "SECURE");
+            }
+            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
         else {
             struct mg_http_serve_opts opts = {.root_dir = "."}; 
@@ -138,10 +168,22 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 int main(void) {
+    mg_log_set(0);
     storage_load_all(); 
-    engine_init();
+    
+    // --- FORCE STARTUP DISARMED & AUDIT ---
+    engine_init(); 
+    printf("\n=== STARTUP DIAGNOSTIC AUDIT ===\n");
+    printf("Initial System State: %d (Forced Disarmed)\n", engine_get_arm_state());
+    for(int i=0; i < z_count; i++) {
+        printf(" Zone %d [%-10s]: %s\n", zones[i].id, zones[i].name, (digitalRead(zones[i].gpio)==0) ? "!! OPEN !!" : "SECURE");
+    }
+    printf("================================\n\n");
+
     monitor_init();
     mg_mgr_init(&mgr);
+// 0.0.0.0 means "Listen to everything: WiFi, Ethernet, and Local"
+
     mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
     while (1) {
         mg_mgr_poll(&mgr, 10);

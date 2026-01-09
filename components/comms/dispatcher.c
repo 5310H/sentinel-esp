@@ -17,6 +17,7 @@ static int is_type(const char *val, const char *type) {
 }
 
 void dispatcher_alert(zone_t *z) {
+    
     if (!z) return;
     
     int monitoring_enabled = 0;
@@ -27,7 +28,7 @@ void dispatcher_alert(zone_t *z) {
         category = "FIRE";
         monitoring_enabled = config.is_monitor_fire;
     } 
-    else if (is_type(z->type, "police") || is_type(z->type, "door") || is_type(z->type, "motion")) {
+    else if (is_type(z->type, "police")) {
         category = "POLICE";
         monitoring_enabled = config.is_monitor_police;
     } 
@@ -46,7 +47,10 @@ void dispatcher_alert(zone_t *z) {
     }
 
     // STEP 2: NOTIFY (1=None, 2=Email, 3=Telegram, 4=Noonlight)
-    if (config.notify == 1) return;
+    if (config.notify == 1) {
+        printf("notify = none");
+        return;
+    } 
 
     if (config.notify == 4) {
         // Now using your noonlight.h function
@@ -55,7 +59,7 @@ void dispatcher_alert(zone_t *z) {
     else if (config.notify == 2) {
         // FIXED: Calling the actual function in your smtp.c
         smtp_alert_all_contacts(&config, users, u_count, z);
-    }
+    }    
     // Note: Category 3 (Telegram) would go here
 }
 

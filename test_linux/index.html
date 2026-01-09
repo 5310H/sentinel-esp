@@ -11,6 +11,7 @@
             --not-ready: #ffc107;
             --armed: #dc3545;
             --accent: #007bff;
+            --delay: #1890ff;
         }
 
         body { 
@@ -37,7 +38,10 @@
         .ready { background: var(--ready); color: white; }
         .not-ready { background: var(--not-ready); color: black; }
         .armed { background: var(--armed); color: white; }
+        .delay { background: var(--delay); color: white; animation: blink 1s infinite; }
         .offline { background: #444; color: #888; }
+
+        @keyframes blink { 50% { opacity: 0.7; } }
 
         .display { 
             background: #000; padding: 20px; font-size: 32px; 
@@ -46,7 +50,6 @@
             align-items: center; justify-content: center; letter-spacing: 8px;
         }
 
-        /* Large Touch Keypad */
         .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
         .key { 
             background: #333; padding: 25px 0; border-radius: 12px; 
@@ -57,7 +60,6 @@
 
         #maint-menu { display: none; padding-top: 10px; }
         
-        /* Full-width mobile buttons */
         .menu-btn { 
             display: block; padding: 20px; margin: 12px 0; 
             border-radius: 12px; font-weight: bold; width: 100%; 
@@ -70,12 +72,6 @@
         .btn-nav { background: #444; font-size: 16px; }
 
         hr { border: 0; border-top: 1px solid #444; margin: 20px 0; }
-
-        /* Media Query for very small screens */
-        @media (max-width: 360px) {
-            .key { padding: 18px 0; font-size: 20px; }
-            .display { font-size: 24px; }
-        }
     </style>
 </head>
 <body>
@@ -114,8 +110,8 @@
 
     <script>
         let pin = "";
+        const STATE_NAMES = ["DISARMED", "EXIT DELAY", "ARMED", "ENTRY DELAY", "ALARMED"];
         
-        // Touch-friendly press
         function press(n) { 
             if(pin.length < 4) { 
                 pin += n; 
@@ -126,70 +122,83 @@
         function clr() { pin = ""; document.getElementById('pin-display').innerText = ""; }
 
         async function submit() {
-            const res = await fetch('/api/auth', { 
-                method: 'POST', 
-                body: JSON.stringify({pin}),
-                headers: {'Content-Type': 'application/json'} 
-            });
-            const data = await res.json();
-            if(data.authenticated) {
-                document.getElementById('auth-section').style.display = "none";
-                document.getElementById('maint-menu').style.display = "block";
-                document.getElementById('user-info').innerText = "User: " + data.name;
-                if(data.is_admin) document.getElementById('admin-links').style.display = "block";
-                updateUI(data.state, true); 
-            } else {
-                clr();
-                document.getElementById('pin-display').innerText = "ERROR";
-                setTimeout(clr, 1000);
-            }
+            try {
+                const res = await fetch('/api/auth', { 
+                    method: 'POST', 
+                    body: JSON.stringify({pin}),
+                    headers: {'Content-Type': 'application/json'} 
+                });
+                const data = await res.json();
+                
+                if(data.authenticated) {
+                    document.getElementById('auth-section').style.display = "none";
+                    document.getElementById('maint-menu').style.display = "block";
+                    document.getElementById('user-info').innerText = "User: " + data.name;
+                    if(data.is_admin) document.getElementById('admin-links').style.display = "block";
+                    check(); 
+                } else {
+                    clr();
+                    document.getElementById('pin-display').innerText = "ERROR";
+                    setTimeout(clr, 1000);
+                }
+            } catch(e) { console.error("Auth error", e); }
         }
 
         function updateUI(state, isReady) {
             const badge = document.getElementById('quick-status');
-            const armed = (state !== 0);
+            const isArmed = (state !== 0);
             
-            if(armed) {
-                badge.innerText = "SYSTEM ARMED";
+            // Map states to visual badge
+            if (state === 1 || state === 3) {
+                badge.innerText = STATE_NAMES[state];
+                badge.className = "status-badge delay";
+            } else if (isArmed) {
+                badge.innerText = STATE_NAMES[state];
                 badge.className = "status-badge armed";
             } else {
                 badge.innerText = isReady ? "READY TO ARM" : "NOT READY (CHECK ZONES)";
                 badge.className = "status-badge " + (isReady ? "ready" : "not-ready");
             }
 
+            // Update button visibility
             if(document.getElementById('maint-menu').style.display === "block") {
-                document.getElementById('arm-group').style.display = armed ? "none" : "block";
-                document.getElementById('btn-disarm').style.display = armed ? "block" : "none";
+                document.getElementById('arm-group').style.display = isArmed ? "none" : "block";
+                document.getElementById('btn-disarm').style.display = isArmed ? "block" : "none";
                 document.getElementById('arm-away-btn').disabled = !isReady;
                 document.getElementById('arm-stay-btn').disabled = !isReady;
             }
         }
 
         async function doAction(url, body) {
-            const res = await fetch(url, { 
-                method: 'POST', 
-                body: JSON.stringify(body),
-                headers: {'Content-Type': 'application/json'}
-            });
-            if(!res.ok) {
-                const data = await res.json();
-                alert(data.msg || "Action Failed");
-            }
-            check();
+            try {
+                await fetch(url, { 
+                    method: 'POST', 
+                    body: JSON.stringify(body),
+                    headers: {'Content-Type': 'application/json'}
+                });
+                check(); 
+            } catch(e) { console.error("Action error", e); }
         }
 
         async function check() {
             try {
+                // Fetching from your C server's Part A JSON output
                 const res = await fetch('/api/status?t=' + Date.now());
                 const data = await res.json();
-                updateUI(data.state, data.is_ready);
+                
+                // Navigate into the 'config' object created by snprintf in main_mock.c
+                if (data && data.config) {
+                    const sysState = data.config.sys_state;
+                    const isReady = data.config.ready;
+                    updateUI(sysState, isReady);
+                }
             } catch(e) { 
                 document.getElementById('quick-status').innerText = "OFFLINE"; 
                 document.getElementById('quick-status').className = "status-badge offline";
             }
         }
 
-        setInterval(check, 3000);
+        setInterval(check, 2000);
         check();
     </script>
 </body>

@@ -148,7 +148,7 @@ void engine_tick(void) {
 
         // A. 24-HOUR ZONES (Fire/Panic/Water)
         if (!zones[i].is_alarm_on_armed_only) {
-            printf("[CRITICAL] 24HR Zone Tripped: %s\n", zones[i].name);
+//            printf("[CRITICAL] 24HR Zone Tripped: %s\n", zones[i].name);
             engine_trigger_alarm(i);
             continue; 
         }

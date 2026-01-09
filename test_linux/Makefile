@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -I../components/config -I../components/engine -I../components/storage -I../components/hal -I../components/comms -g
-LDFLAGS = -lcjson -lcurl -lpthread
+LDFLAGS = -lcjson -lcurl -lpthread -lssl -lcrypto -DMG_ENABLE_OPENSSL=1 
 
 OBJ = ../components/storage/storage_mgr.o \
       ../components/comms/dispatcher.o \
