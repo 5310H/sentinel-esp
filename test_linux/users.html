@@ -1,32 +1,71 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sentinel - User Maint</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: white; padding: 20px; }
-        .nav { margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px; }
-        .nav a { color: #007bff; text-decoration: none; margin-right: 20px; font-weight: bold; }
-        .box { background: #2a2a2a; padding: 20px; border-radius: 8px; max-width: 800px; margin: auto; }
-        input, select { background: #333; color: white; border: 1px solid #444; padding: 10px; width: 100%; margin: 5px 0; box-sizing: border-box; }
-        table { width: 100%; margin-top: 20px; border-collapse: collapse; }
-        th, td { padding: 10px; border-bottom: 1px solid #444; text-align: left; }
-        .btn { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .btn-primary { background: #007bff; color: white; width: 100%; }
-        .btn-edit { background: #ffc107; color: black; }
-        .btn-del { background: #dc3545; color: white; }
-        .btn-test { background: #17a2b8; color: white; font-size: 11px; padding: 5px; }
+        :root {
+            --bg: #1a1a1a;
+            --panel: #2a2a2a;
+            --accent: #007bff;
+            --edit: #ffc107;
+            --danger: #dc3545;
+        }
+
+        body { 
+            font-family: -apple-system, sans-serif; 
+            background: var(--bg); color: white; margin: 0; padding: 15px; 
+        }
+
+        .box { background: var(--panel); padding: 20px; border-radius: 12px; max-width: 500px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        
+        .nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 15px; }
+        .nav a { color: var(--accent); text-decoration: none; font-weight: bold; font-size: 14px; }
+
+        h3 { margin-top: 0; color: #eee; }
+
+        input, select { 
+            background: #333; color: white; border: 1px solid #444; 
+            padding: 12px; width: 100%; margin: 8px 0; border-radius: 8px;
+            box-sizing: border-box; font-size: 16px; /* 16px prevents iOS zoom on focus */
+        }
+
+        /* Responsive User Cards instead of Tables */
+        .user-list { margin-top: 25px; }
+        .user-card { 
+            background: #333; padding: 15px; border-radius: 10px; margin-bottom: 15px; 
+            border: 1px solid #444; position: relative;
+        }
+        .user-info b { display: block; font-size: 18px; color: var(--accent); }
+        .user-info span { display: block; font-size: 13px; color: #aaa; margin: 4px 0; }
+
+        .btn-group { display: flex; gap: 8px; margin-top: 12px; }
+        
+        .btn { 
+            padding: 12px; border: none; border-radius: 8px; cursor: pointer; 
+            font-weight: bold; flex: 1; text-align: center; font-size: 14px;
+        }
+        .btn-primary { background: var(--accent); color: white; width: 100%; margin-top: 10px; }
+        .btn-edit { background: var(--edit); color: black; }
+        .btn-del { background: var(--danger); color: white; }
+        .btn-test { background: #17a2b8; color: white; }
+
+        /* Tablet/Desktop: Bring back some table-like behavior if needed */
+        @media (min-width: 600px) {
+            .box { max-width: 800px; }
+        }
     </style>
 </head>
 <body>
     <div class="box">
         <div class="nav">
-            <a href="status.html">← Alarm Status</a>
-            <span>User Management</span>
+            <a href="index.html">← Back to Keypad</a>
+            <span style="font-size: 14px; color: #888;">User Management</span>
         </div>
 
         <h3>Add / Edit User</h3>
         <input type="text" id="name" placeholder="User Name">
-        <input type="password" id="pin" placeholder="Security PIN">
+        <input type="password" id="pin" placeholder="Security PIN (4 Digits)">
         <input type="email" id="email" placeholder="Email Address">
         <select id="notify">
             <option value="1">1 - Silent (Local Only)</option>
@@ -34,29 +73,32 @@
             <option value="3">3 - Telegram Bot</option>
             <option value="4">4 - Noonlight Pro Dispatch</option>
         </select>
-        <button id="submit-btn" class="btn btn-primary" onclick="handleSave()">Add User</button>
+        <button id="submit-btn" class="btn btn-primary" onclick="handleSave()">ADD USER</button>
 
-        <table>
-            <thead><tr><th>Name</th><th>Email</th><th>Notify</th><th>Actions</th></tr></thead>
-            <tbody id="user-table-body"></tbody>
-        </table>
+        <div id="user-list" class="user-list">
+            </div>
     </div>
 
     <script>
         async function loadUsers() {
             const res = await fetch('/api/users?t=' + Date.now());
             const users = await res.json();
-            document.getElementById('user-table-body').innerHTML = users.map(u => `
-                <tr>
-                    <td>${u.name}</td>
-                    <td>${u.email}</td>
-                    <td><b>Type ${u.notify}</b></td>
-                    <td>
+            const list = document.getElementById('user-list');
+            
+            list.innerHTML = users.map(u => `
+                <div class="user-card">
+                    <div class="user-info">
+                        <b>${u.name}</b>
+                        <span>📧 ${u.email || 'No Email'}</span>
+                        <span>🔔 Notify Level: ${u.notify}</span>
+                    </div>
+                    <div class="btn-group">
                         <button class="btn btn-edit" onclick="setEdit('${u.name}','${u.email}',${u.notify})">Edit</button>
                         <button class="btn btn-test" onclick="testNotify('${u.name}')">Test</button>
                         <button class="btn btn-del" onclick="deleteUser('${u.name}')">Del</button>
-                    </td>
-                </tr>`).join('');
+                    </div>
+                </div>
+            `).join('');
         }
 
         function setEdit(name, email, notify) {
@@ -64,34 +106,54 @@
             document.getElementById('name').disabled = true;
             document.getElementById('email').value = email;
             document.getElementById('notify').value = notify;
-            document.getElementById('submit-btn').innerText = "Update User";
+            document.getElementById('submit-btn').innerText = "UPDATE USER";
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         async function handleSave() {
-            const isUpdate = document.getElementById('submit-btn').innerText.includes("Update");
+            const isUpdate = document.getElementById('submit-btn').innerText.includes("UPDATE");
             const payload = {
                 name: document.getElementById('name').value,
                 pin: document.getElementById('pin').value,
                 email: document.getElementById('email').value,
                 notify: parseInt(document.getElementById('notify').value)
             };
-            await fetch(isUpdate ? '/api/users/update' : '/api/users/add', {
+
+            if(!payload.name || (!isUpdate && !payload.pin)) {
+                alert("Name and PIN are required.");
+                return;
+            }
+
+            const url = isUpdate ? '/api/users/update' : '/api/users/add';
+            await fetch(url, {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            location.reload();
+            
+            // Clear form and reload
+            document.getElementById('name').disabled = false;
+            document.getElementById('name').value = "";
+            document.getElementById('pin').value = "";
+            document.getElementById('email').value = "";
+            document.getElementById('submit-btn').innerText = "ADD USER";
+            loadUsers();
         }
 
         async function deleteUser(name) {
             if(confirm("Delete " + name + "?")) {
-                await fetch('/api/users/delete', { method: 'POST', body: JSON.stringify({name}) });
+                await fetch('/api/users/delete', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({name}) 
+                });
                 loadUsers();
             }
         }
 
         async function testNotify(name) {
-            alert("Sending test notification to " + name + "...");
             await fetch('/api/test_notify?name=' + name);
+            alert("Test alert triggered for " + name);
         }
 
         loadUsers();

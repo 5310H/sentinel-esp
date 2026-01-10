@@ -6,13 +6,15 @@
 #include "engine.h"
 #include "storage_mgr.h"
 
-// --- PROTOTYPES ---
+// --- PROTOTYPES & EXTERNS ---
 void monitor_init(void);
+extern bool is_ready(void); 
+extern const char* engine_get_violation_name(void);
+extern const char* engine_get_violation_type(void);
 
 // --- GLOBAL VARIABLES ---
 static struct mg_mgr mgr;
 int mock_gpio_pins[100] = { [0 ... 99] = 1 }; 
-// Track relay states for the Part C status loop
 bool mock_relay_states[MAX_RELAYS] = { false }; 
 
 // --- HELPER FUNCTIONS ---
@@ -29,7 +31,7 @@ void get_json_str(struct mg_str json, const char *path, char *dst, int dst_len) 
     }
 }
 
-// --- MOCK HAL WRAPPERS (NOW CONNECTED) ---
+// --- MOCK HAL WRAPPERS ---
 void __wrap_hal_set_relay(int relay_id, bool active) { 
     if (relay_id >= 0 && relay_id < MAX_RELAYS) mock_relay_states[relay_id] = active;
     printf("[HAL] Relay %d -> %s\n", relay_id, active ? "ON" : "OFF");
@@ -64,32 +66,46 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             char pin_in[STR_SMALL] = {0};
             get_json_str(hm->body, "$.pin", pin_in, sizeof(pin_in));
             keypad_result_t res = engine_check_keypad(pin_in);
+
             mg_http_reply(c, 200, "Content-Type: application/json\r\n",
-                "{\"authenticated\":%s,\"is_admin\":%s,\"name\":\"%s\",\"state\":%d}",
-                res.authenticated ? "true" : "false", res.is_admin ? "true" : "false",
-                res.name, engine_get_arm_state());
+                "{"
+                  "\"authenticated\": %s,"
+                  "\"is_admin\": %s,"
+                  "\"name\": \"%s\","
+                  "\"config\": {"
+                    "\"state\": %d,"
+                    "\"ready\": %s,"
+                    "\"violation\": \"%s\","
+                    "\"violation_type\": \"%s\""
+                  "}"
+                "}",
+                res.authenticated ? "true" : "false", 
+                res.is_admin ? "true" : "false",
+                res.name, 
+                engine_get_arm_state(),
+                is_ready() ? "true" : "false", 
+                engine_get_violation_name(),
+                engine_get_violation_type()
+            ); 
         }
         else if (mg_strcmp(hm->uri, mg_str("/api/status")) == 0) {
-            bool is_ready = true;
             static char s_buf[45056]; 
             memset(s_buf, 0, sizeof(s_buf));
 
-            for (int i = 0; i < z_count; i++) {
-                if (zones[i].is_perimeter && digitalRead(zones[i].gpio) == 0) { is_ready = false; break; }
-            }
-
             // --- Part A: GLOBAL CONFIG ---
+            // NOTE: Changed "sys_state" to "state" to match Javascript expectations
             int off = snprintf(s_buf, sizeof(s_buf), 
                 "{\"config\":{"
                 "\"acct_id\":\"%s\",\"pin\":\"%s\",\"name\":\"%s\",\"addr1\":\"%s\",\"addr2\":\"%s\","
-                "\"city\":\"%s\",\"state\":\"%s\",\"zip\":\"%s\",\"email\":\"%s\",\"phone\":\"%s\","
+                "\"city\":\"%s\",\"state_prov\":\"%s\",\"zip\":\"%s\",\"email\":\"%s\",\"phone\":\"%s\","
                 "\"instr\":\"%s\",\"lat\":%f,\"lon\":%f,\"acc\":%d,"
                 "\"mon_id\":\"%s\",\"mon_key\":\"%s\",\"mon_url\":\"%s\",\"notify\":%d,"
                 "\"fire\":%s,\"police\":%s,\"med\":%s,\"oth\":%s,"
                 "\"smtp_srv\":\"%s\",\"smtp_port\":%d,\"smtp_user\":\"%s\",\"smtp_pass\":\"%s\","
                 "\"mqtt_srv\":\"%s\",\"mqtt_port\":%d,\"mqtt_user\":\"%s\",\"mqtt_pass\":\"%s\","
                 "\"tg_id\":\"%s\",\"tg_tok\":\"%s\",\"tg_en\":%s,\"nvr_url\":\"%s\",\"ha_url\":\"%s\","
-                "\"ent_d\":%d,\"ext_d\":%d,\"can_d\":%d,\"sys_state\":%d,\"ready\":%s},",
+                "\"ent_d\":%d,\"ext_d\":%d,\"can_d\":%d,\"state\":%d,\"ready\":%s,"
+                "\"violation\":\"%s\",\"violation_type\":\"%s\"},",
                 config.account_id, config.pin, config.name, config.address1, config.address2,
                 config.city, config.state, config.zip_code, config.email, config.phone,
                 config.instructions, config.latitude, config.longitude, config.accuracy,
@@ -101,7 +117,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 config.telegram_id, config.telegram_token, config.is_telegram_enabled ? "true" : "false",
                 config.nvrserver_url, config.haintegration_url,
                 config.entry_delay, config.exit_delay, config.cancel_delay,
-                engine_get_arm_state(), is_ready ? "true" : "false");
+                engine_get_arm_state(), is_ready() ? "true" : "false",
+                engine_get_violation_name(), engine_get_violation_type());
 
             // --- Part B: ZONES ARRAY ---
             off += snprintf(s_buf + off, sizeof(s_buf) - off, "\"zones\":[");
@@ -133,30 +150,21 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             strcat(s_buf, "]}");
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", s_buf);
         }
-// --- NEW: ARM/DISARM HANDLERS ---
         else if (mg_strcmp(hm->uri, mg_str("/api/arm")) == 0) {
-            // mode 1 is usually ARM_AWAY, mode 2 is ARM_STAY
             engine_ui_arm(1); 
-            printf("[API] Arming Command Received\n");
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
         else if (mg_strcmp(hm->uri, mg_str("/api/disarm")) == 0) {
             engine_ui_disarm();
-            // Clear mock relays on disarm
             for(int i=0; i<MAX_RELAYS; i++) mock_relay_states[i] = false;
-            printf("[API] Disarm Command Received\n");
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
-
-        // --- NEW: MOCK SENSOR TRIGGER ---
         else if (mg_strcmp(hm->uri, mg_str("/api/trigger")) == 0) {
             char id_buf[10] = {0};
             mg_http_get_var(&hm->query, "id", id_buf, sizeof(id_buf));
             int id = atoi(id_buf);
             if (id >= 0 && id < 100) {
-                // Toggle the pin: if 1 (Secure), set to 0 (Violated)
                 mock_gpio_pins[id] = (mock_gpio_pins[id] == 1) ? 0 : 1;
-                printf("[MOCK] Zone %d is now %s\n", id, mock_gpio_pins[id] == 0 ? "VIOLATED" : "SECURE");
             }
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
@@ -170,9 +178,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 int main(void) {
     mg_log_set(0);
     storage_load_all(); 
-    
-    // --- FORCE STARTUP DISARMED & AUDIT ---
     engine_init(); 
+    
     printf("\n=== STARTUP DIAGNOSTIC AUDIT ===\n");
     printf("Initial System State: %d (Forced Disarmed)\n", engine_get_arm_state());
     for(int i=0; i < z_count; i++) {
@@ -182,8 +189,6 @@ int main(void) {
 
     monitor_init();
     mg_mgr_init(&mgr);
-// 0.0.0.0 means "Listen to everything: WiFi, Ethernet, and Local"
-
     mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
     while (1) {
         mg_mgr_poll(&mgr, 10);

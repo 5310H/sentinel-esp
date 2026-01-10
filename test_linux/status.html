@@ -89,7 +89,7 @@
                 // 1. Update Header
                 const config = data.config || {};
                 document.getElementById('siteName').innerText = config.name || "Unknown Site";
-                document.getElementById('sysState').innerText = STATE_NAMES[config.sys_state] || "UNKNOWN";
+                document.getElementById('sysState').innerText = STATE_NAMES[config.state] || "UNKNOWN";
 
                 // 2. Render Zones Grid
                 const zGrid = document.getElementById('zGrid');
