@@ -146,11 +146,15 @@ void engine_tick(void) {
         if (!is_tripped) continue;
 
         // 24-HOUR ZONES (Fire/Panic)
+
+        // IMPROVED LOGIC
         if (!zones[i].is_alarm_on_armed_only) {
-            engine_trigger_alarm(i);
+        // Only trigger if it's a critical life-safety type OR if we are armed
+            if (strcmp(zones[i].type, "fire") == 0 || strcmp(zones[i].type, "panic") == 0) {
+                engine_trigger_alarm(i);
+            }
             continue; 
         }
-
         // CHIME
         if (s_arm_state == 0 && zones[i].is_chime && s_chime_timer == 0) {
             for (int r = 0; r < r_count; r++) {

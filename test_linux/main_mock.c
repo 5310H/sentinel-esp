@@ -14,7 +14,7 @@ extern const char* engine_get_violation_type(void);
 
 // --- GLOBAL VARIABLES ---
 static struct mg_mgr mgr;
-int mock_gpio_pins[100] = { [0 ... 99] = 1 }; 
+int mock_gpio_pins[100] = { [0 ... 99] = 1 }; // 1 = Secure, 0 = Open
 bool mock_relay_states[MAX_RELAYS] = { false }; 
 
 // --- HELPER FUNCTIONS ---
@@ -48,7 +48,24 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message *hm = (struct mg_http_message *) ev_data;
         
-        if (mg_strcmp(hm->uri, mg_str("/api/users")) == 0) {
+        // --- 1. ZONES ENDPOINT (For status.html) ---
+        if (mg_strcmp(hm->uri, mg_str("/api/zones")) == 0) {
+            char *z_buf = malloc(8192); 
+            int off = snprintf(z_buf, 8192, "[");
+            for (int i = 0; i < z_count; i++) {
+                off += snprintf(z_buf + off, 8192 - off, 
+                    "{\"name\":\"%s\",\"open\":%s}%s",
+                    zones[i].name, 
+                    (digitalRead(zones[i].gpio) == 0) ? "true" : "false",
+                    (i < z_count - 1) ? "," : "");
+            }
+            strcat(z_buf, "]");
+            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", z_buf);
+            free(z_buf);
+        }
+
+        // --- 2. USERS ENDPOINTS ---
+        else if (mg_strcmp(hm->uri, mg_str("/api/users")) == 0) {
             char *json = users_to_json(); 
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", json);
             free(json);
@@ -62,6 +79,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             user_add(users, &u_count, name, pin, "", email, atoi(n_buf), false); 
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
+
+        // --- 3. AUTH ENDPOINT ---
         else if (mg_strcmp(hm->uri, mg_str("/api/auth")) == 0) {
             char pin_in[STR_SMALL] = {0};
             get_json_str(hm->body, "$.pin", pin_in, sizeof(pin_in));
@@ -88,12 +107,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 engine_get_violation_type()
             ); 
         }
+
+        // --- 4. FULL STATUS ENDPOINT (RESTORED) ---
         else if (mg_strcmp(hm->uri, mg_str("/api/status")) == 0) {
             static char s_buf[45056]; 
             memset(s_buf, 0, sizeof(s_buf));
 
-            // --- Part A: GLOBAL CONFIG ---
-            // NOTE: Changed "sys_state" to "state" to match Javascript expectations
             int off = snprintf(s_buf, sizeof(s_buf), 
                 "{\"config\":{"
                 "\"acct_id\":\"%s\",\"pin\":\"%s\",\"name\":\"%s\",\"addr1\":\"%s\",\"addr2\":\"%s\","
@@ -120,43 +139,34 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 engine_get_arm_state(), is_ready() ? "true" : "false",
                 engine_get_violation_name(), engine_get_violation_type());
 
-            // --- Part B: ZONES ARRAY ---
             off += snprintf(s_buf + off, sizeof(s_buf) - off, "\"zones\":[");
             for (int i = 0; i < z_count; i++) {
                 off += snprintf(s_buf + off, sizeof(s_buf) - off, 
-                    "{\"id\":%d,\"name\":\"%s\",\"desc\":\"%s\",\"type\":\"%s\",\"loc\":\"%s\","
-                    "\"mod\":\"%s\",\"mfr\":\"%s\",\"chime\":%s,\"arm_only\":%s,\"gpio\":%d,"
-                    "\"i2c\":%s,\"i2c_addr\":%d,\"peri\":%s,\"interior\":%s,\"panic\":%s,\"violated\":%s}%s", 
-                    zones[i].id, zones[i].name, zones[i].description, zones[i].type, zones[i].location,
-                    zones[i].model, zones[i].manufacturer, zones[i].is_chime ? "true" : "false",
-                    zones[i].is_alarm_on_armed_only ? "true" : "false", zones[i].gpio,
-                    zones[i].is_i2c ? "true" : "false", zones[i].i2c_address,
-                    zones[i].is_perimeter ? "true" : "false", zones[i].is_interior ? "true" : "false",
-                    zones[i].is_panic ? "true" : "false", (digitalRead(zones[i].gpio) == 0) ? "true" : "false",
+                    "{\"id\":%d,\"name\":\"%s\",\"violated\":%s}%s", 
+                    zones[i].id, zones[i].name, 
+                    (digitalRead(zones[i].gpio) == 0) ? "true" : "false",
                     (i < z_count - 1) ? "," : "");
             }
 
-            // --- Part C: RELAYS ARRAY ---
             off += snprintf(s_buf + off, sizeof(s_buf) - off, "],\"relays\":[");
             for (int i = 0; i < r_count; i++) {
                 off += snprintf(s_buf + off, sizeof(s_buf) - off, 
-                    "{\"id\":%d,\"name\":\"%s\",\"desc\":\"%s\",\"dur\":%d,\"loc\":\"%s\","
-                    "\"type\":\"%s\",\"repeat\":%s,\"gpio\":%d,\"active\":%s}%s", 
-                    relays[i].id, relays[i].name, relays[i].description, relays[i].duration,
-                    relays[i].location, relays[i].type, relays[i].is_repeat ? "true" : "false",
-                    relays[i].gpio, mock_relay_states[relays[i].id] ? "true" : "false", 
+                    "{\"id\":%d,\"name\":\"%s\",\"active\":%s}%s", 
+                    relays[i].id, relays[i].name, 
+                    mock_relay_states[relays[i].id] ? "true" : "false", 
                     (i < r_count - 1) ? "," : "");
             }
             strcat(s_buf, "]}");
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", s_buf);
         }
+
+        // --- 5. CONTROL ENDPOINTS ---
         else if (mg_strcmp(hm->uri, mg_str("/api/arm")) == 0) {
             engine_ui_arm(1); 
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
         else if (mg_strcmp(hm->uri, mg_str("/api/disarm")) == 0) {
             engine_ui_disarm();
-            for(int i=0; i<MAX_RELAYS; i++) mock_relay_states[i] = false;
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
         else if (mg_strcmp(hm->uri, mg_str("/api/trigger")) == 0) {
@@ -165,6 +175,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             int id = atoi(id_buf);
             if (id >= 0 && id < 100) {
                 mock_gpio_pins[id] = (mock_gpio_pins[id] == 1) ? 0 : 1;
+                printf("[MOCK] Toggle Zone %d: %s\n", id, mock_gpio_pins[id] ? "SECURE" : "OPEN");
             }
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
         }
@@ -175,25 +186,25 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     }
 }
 
+// --- MAIN LOOP ---
 int main(void) {
+// Set log level to 0 (NONE) or 1 (ERROR ONLY)
+// 0 = No logs, 1 = Errors, 2 = Info, 3 = Debug, 4 = Verbose
     mg_log_set(0);
     storage_load_all(); 
     engine_init(); 
-    
-    printf("\n=== STARTUP DIAGNOSTIC AUDIT ===\n");
-    printf("Initial System State: %d (Forced Disarmed)\n", engine_get_arm_state());
-    for(int i=0; i < z_count; i++) {
-        printf(" Zone %d [%-10s]: %s\n", zones[i].id, zones[i].name, (digitalRead(zones[i].gpio)==0) ? "!! OPEN !!" : "SECURE");
-    }
-    printf("================================\n\n");
-
     monitor_init();
+
+    printf("\n=== SENTINEL FULL MOCK SERVER ===\n");
+    printf("Listening on http://localhost:8000\n");
+
     mg_mgr_init(&mgr);
     mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
+
     while (1) {
-        mg_mgr_poll(&mgr, 10);
+        mg_mgr_poll(&mgr, 50);
         engine_tick();
-        usleep(100000);
+        usleep(50000); // 50ms tick
     }
     return 0;
 }
